@@ -1,0 +1,28 @@
+{
+  "name": "HiGHS (dev + benchmark)",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/gh-cli:1": {},
+    "ghcr.io/devcontainers/features/git-lfs:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "llvm-vs-code-extensions.vscode-clangd",
+        "ms-vscode.cmake-tools",
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder}/benchmark/.venv/bin/python",
+        "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+        "clangd.arguments": ["--background-index", "--header-insertion=never"]
+      }
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/postCreate.sh",
+  "remoteUser": "vscode"
+}

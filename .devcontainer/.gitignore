@@ -1,0 +1,3 @@
+# Local env / secrets - never commit these
+*.lic
+.env

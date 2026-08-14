@@ -1,3 +1,6 @@
 # Exclude mps/lp files from github language stats
 *.mps linguist-vendored
 *.lp linguist-vendored
+
+# Shell scripts must be LF so they run inside the devcontainer
+*.sh text eol=lf

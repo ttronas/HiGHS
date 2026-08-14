@@ -1,0 +1,15 @@
+[project]
+name = "highs-benchmark"
+version = "0.1.0"
+description = "MIPLIB2017 benchmark harness for HiGHS vs. other MIP solvers (e.g. Gurobi)"
+requires-python = ">=3.10"
+dependencies = [
+    "gurobipy>=12.0,<13",
+    "matplotlib>=3.8",
+]
+
+[dependency-groups]
+dev = []
+
+[tool.uv]
+managed = true
