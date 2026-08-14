@@ -70,6 +70,33 @@ def model_key(p: Path) -> str:
     return name
 
 
+def prune_results(results_root: Path, inst_set: str, active_stems: set[str]) -> int:
+    """Remove cached results whose instance no longer exists in the set folder.
+
+    Only touches the nested layout results/{solver}/{ver}/{machine}/{set}/.
+    """
+    removed = 0
+    if not results_root.exists():
+        return removed
+    for solver_dir in results_root.iterdir():
+        if not solver_dir.is_dir():
+            continue
+        for version_dir in solver_dir.iterdir():
+            if not version_dir.is_dir():
+                continue
+            for machine_dir in version_dir.iterdir():
+                if not machine_dir.is_dir():
+                    continue
+                set_dir = machine_dir / inst_set
+                if not set_dir.is_dir():
+                    continue
+                for jf in set_dir.glob("*.json"):
+                    if jf.stem not in active_stems:
+                        jf.unlink(missing_ok=True)
+                        removed += 1
+    return removed
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="MIPLIB benchmark runner (cached).")
     ap.add_argument("--solver", nargs="+", choices=KNOWN_SOLVERS,
@@ -93,6 +120,13 @@ def main() -> int:
                     help="limit to the first N instances (smoke test)")
     ap.add_argument("--instance", action="append", default=[], metavar="NAME",
                     help="only run the named instance(s); may repeat")
+    ap.add_argument("--set", default=None, metavar="NAME",
+                    help="test-set tag for the cache path (default: the name of "
+                         "--instances-root), so dropped problems never collide "
+                         "with other sets' caches")
+    ap.add_argument("--prune", action="store_true",
+                    help="delete cached results for instances that are no longer "
+                         "present in this set's folder before running")
     ap.add_argument("--force", action="store_true",
                     help="ignore cache and re-run every selected instance")
     ap.add_argument("--workdir", type=Path, default=None,
@@ -101,6 +135,7 @@ def main() -> int:
 
     inst_root = args.instances_root or instances_dir()
     results_root = args.results_root or results_dir()
+    inst_set = args.set or inst_root.name
     highs_bin = args.highs_bin or (inst_root.parent.parent / "build" / "bin" / "highs")
     if not Path(highs_bin).exists():
         # fall back to common repo layout
@@ -125,6 +160,15 @@ def main() -> int:
     if args.subset:
         instances = instances[: args.subset]
     print(f"instances: {len(instances)}")
+    print(f"set: {inst_set}")
+
+    if args.prune:
+        removed = prune_results(results_root, inst_set,
+                                {p.stem for p in instances})
+        if removed:
+            print(f"pruned {removed} stale cached result(s)")
+        else:
+            print("prune: nothing to remove")
 
     machine = machine_id()
     workdir = args.workdir or (Path.home() / ".benchmark-work")
@@ -154,7 +198,8 @@ def main() -> int:
                 machine=machine,
                 run_date=utcnow_iso(),
             )
-            dest = result_path(results_root, solver.name, version, machine, inst.stem)
+            dest = result_path(results_root, solver.name, version, machine,
+                               inst.stem, inst_set=inst_set)
             stale = False
             if dest.exists() and not args.force:
                 old = load_json(dest)
@@ -176,6 +221,7 @@ def main() -> int:
             print(f"  running {solver.name} {inst.stem} ...", end=" ", flush=True)
             record = solver.solve(inst, params, workdir)
             record["solver_version"] = version
+            record["instance_set"] = inst_set
             save_json(dest, record)
             tag = f"{record['status']} t={record['runtime_s']:8.2f}s"
             if record.get("objective") is not None:

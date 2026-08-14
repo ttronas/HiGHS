@@ -77,22 +77,73 @@ uv run python scripts/run_benchmark.py --solver gurobi --force --subset 1
 
 | flag | default | meaning |
 |---|---|---|
-| `--solver highs gurobi` | `highs gurobi` | which solvers to run; both share `/`params below |
+| `--solver highs gurobi` | `highs gurobi` | which solvers to run; both share the params below |
 | `--threads` | 12 | solver threads (**identical for every solver**) |
 | `--time-limit` | 7200.0 | seconds per instance |
 | `--mip-gap` | 1e-4 | relative gap tolerance |
 | `--subset N` | - | first N instances (smoke test) |
 | `--instance NAME` | - | run only named instance(s), repeatable |
+| `--instances-root DIR` | `benchmark/instances` | folder holding the problems (drop new ones here) |
+| `--results-root DIR` | `benchmark/results` | root of the result caches |
+| `--set NAME` | folder name of `--instances-root` | namespaced cache tag (see below) |
+| `--prune` | off | delete cached results whose instance no longer exists in the folder |
 | `--force` | off | ignore the cache and re-run |
 | `--highs-bin` | build/bin/highs | HiGHS executable |
 | `--highs-parallel` | on | pass `--parallel on|off` to the HiGHS binary |
 
-## Results cache
+## Try it now with the bundled examples
 
-Each run writes a JSON record per (solver, instance):
+`benchmark/examples/` ships seven tiny MIPs (~10-30 binary/integer vars). They
+solve in well under a second and fit even the size-limited Gurobi license, so
+you can exercise the full pipeline with zero downloads:
+
+```bash
+cd benchmark
+uv run python scripts/run_benchmark.py --instances-root examples --time-limit 60 --threads 4
+uv run python scripts/summarize.py --set examples
+```
+
+## Drop your own problems in (drag & drop)
+
+The harness treats `--instances-root` as an **inbox**: drop any number of
+`.mps`, `.lp` (also `.gz`/`.zst`) files into it, run once, and the whole solver
+suite solves and compares them. Files are re-read by content hash, so
+overwriting a file re-runs that instance; `--prune` forgets results for files
+that were removed.
+
+```bash
+mkdir -p my-problems            # or reuse benchmark/instances
+cp rocket.mps my-problems/
+uv run python scripts/run_benchmark.py --instances-root my-problems --time-limit 120
+
+# per-instance table + performance profile + objective agreement check:
+uv run python scripts/summarize.py --set my-problems
+```
+
+Everything you need for an *unexpected* ad-hoc problem - status, wall time,
+objective, bound/gap, and a warning when two solvers both claim "optimal" but
+disagree on the objective - shows up in `summarize.py`.
+
+## Test sets (results namespacing)
+
+Distinct experiments never overwrite each other's cache. Results live at
 
 ```
-benchmark/results/{solver}/{solver_version}/{machine}/{instance}.json
+benchmark/results/{solver}/{solver_version}/{machine}/{set}/{instance}.json
+```
+
+where `{set}` is the name of the folder you pointed `--instances-root` at
+(override with `--set NAME`). Drop a `rocket.mps` into `my-problems` and a
+different `rocket.mps` into `experiment2`: both keep their own results, and
+MIPLIB cache can never be clobbered by an ad-hoc problem with the same name.
+`summarize.py --set NAME` focuses on one set (omit it to see everything).
+
+## Results cache
+
+Each run writes a JSON record per (solver, instance), namespaced by test set:
+
+```
+benchmark/results/{solver}/{solver_version}/{machine}/{set}/{instance}.json
 ```
 
 The version indirection means Gurobi is **run once per version per machine**:
@@ -112,13 +163,16 @@ folder and is never mixed.
 ## Compare & plot
 
 ```bash
+cd benchmark
 uv run python scripts/summarize.py --reference benchmark/reference/mittelmann-12threads.res
+# ad-hoc sets:  uv run python scripts/summarize.py --set my-problems
 ```
 
 Prints a Mittelmann-style table (solved count, unscaled and shifted-geomean
-runtime means; timeouts counted at the limit) for every available solver series
-and writes a **performance profile** (Dolan-More) plot of all series that
-share instances:
+runtime means; timeouts counted at the limit) plus a **per-instance matrix** of
+every series that shares instances (with objectives printed and a warning when
+two "optimal" solvers disagree on the value), and writes a **performance
+profile** (Dolan-More) plot:
 
 ```
 benchmark/results/summary/performance_profile_<timestamp>.png
@@ -126,7 +180,9 @@ benchmark/results/summary/performance_profile_<timestamp>.png
 
 ## Extending to another solver
 
-Solvers are pluggable - Gurobi is just the reference example.
+Solvers are pluggable - Gurobi is just the reference example. Anything that
+reads MPS/LP and reports a status/objective can be added (SCIP, HiGHS as a
+service, MIQCP solvers, ...).
 
 1. Subclass `Solver` in `benchmark/scripts/solvers.py` and implement
    `name`, `version()` and `solve(instance, params, workdir) -> record`.
@@ -136,15 +192,59 @@ Solvers are pluggable - Gurobi is just the reference example.
 3. If the solver has a Python API add it to `benchmark/pyproject.toml` and
    let `uv sync` install it; otherwise drive it via subprocess like HiGHS.
 
+Sketch for adding SCIP (`pip install pyscipopt` + `pyscipopt` in
+`pyproject.toml`); this is documentation, not shipped code:
+
+```python
+# in solvers.py
+import pyscipopt as scip
+
+class SCIPSolver(Solver):
+    name = "scip"
+
+    def version(self) -> str:
+        return scip.SCIPPy().getVersion()
+
+    def solve(self, instance, params, workdir):
+        t0 = time.monotonic()
+        m = scip.readProblem(str(instance))
+        m.setParam("limits/time", params.time_limit)
+        m.setParam("threads", params.threads)
+        m.setParam("limits/gap", params.mip_gap)
+        m.optimize()
+        record = self._base_record(instance, params)
+        record["status"] = "optimal" if m.getStatus() == "optimal" else str(m.getStatus())
+        record["runtime_s"] = time.monotonic() - t0
+        record["objective"] = m.getObjVal() if m.getObjVal() is not None else None
+        record["dual_bound"] = m.getObjBound()
+        record["gap"] = abs(m.getGap())
+        return record
+
+# register in make_solvers():  "scip": SCIPSolver  (+ known in KNOWN_SOLVERS)
+```
+
 The harness gives every solver the same `RunParams` (threads, time limit,
-MIP gap), keys its cache by `{solver}/{version}/{machine}`, and includes it in
-`summarize.py` automatically.
+MIP gap), keys its cache by `{solver}/{version}/{machine}/{set}`, and includes
+it in `summarize.py` automatically (table, matrix, profile).
+
+### Notes for the SCIP driver (if you enable it)
+
+- `limits/gap` is SCIP's relative gap; objective agreement is then checked by
+  `summarize.py` as usual.
+- SCIP's `readProblem` accepts `.mps`/`.lp` (not `.gz`); the harness passes raw
+  paths, so either ship uncompressed problems or add decompression in the
+  driver.
 
 ## Notes / caveats
 
 - Instances: official MIPLIB2017 **benchmark set v2** (`benchmark.zip`, 317 MB)
   from `miplib.zib.de`; instance-name lists and the `.solu` validation file are
   in `benchmark/reference/`.
+- Fresh ad-hoc problems: put them in any folder, run with `--instances-root`
+  and compare with `--set`; the bundled `benchmark/examples/` set is the
+  quickest way to see the full pipeline.
+- Model/row names in `.lp` files must not contain `-` (LP-format ambiguity;
+  HiGHS rejects them, use `_` instead).
 - The Mittelmann table (/`12threads.res`) used v1-preprocessed instances on a
   Ryzen 9 5900X. Use it only as a rough sanity anchor, never as a cross-machine
   measurement.
@@ -152,3 +252,6 @@ MIP gap), keys its cache by `{solver}/{version}/{machine}`, and includes it in
   full run for final numbers.
 - Gurobi license check happens at container creation; if Gurobi prints a
   licensing error during a run, fix the license and rerun with `--force`.
+  Mind the license type: the free/size-limited license caps model size at
+  ~2000 vars - fine for `benchmark/examples/`, too small for most MIPLIB
+  benchmark instances.

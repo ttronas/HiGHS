@@ -52,9 +52,28 @@ import matplotlib.pyplot as plt  # noqa: E402
 # loading
 # ----------------------------------------------------------------------
 def load_series(results_root: Path) -> dict[str, list[dict]]:
+    """Collect result records; series label ends with the set tag.
+
+    Supports both layouts:
+      results/{solver}/{ver}/{machine}/{set}/{instance}.json   (current)
+      results/{solver}/{ver}/{machine}/{instance}.json          (legacy, set=None)
+    """
     series: dict[str, list[dict]] = defaultdict(list)
     if not results_root.exists():
         return dict(series)
+
+    def push(rec: dict, inst_set: str | None, machine_dir: Path) -> None:
+        rec.setdefault("solver", machine_dir.parts[-3])
+        rec.setdefault("solver_version", machine_dir.parts[-2])
+        rec.setdefault("machine", machine_dir.name)
+        rec["instance_set"] = inst_set
+        label = f'{rec["solver"]} {rec["solver_version"]} {rec["machine"][:20]}'
+        if inst_set:
+            label += f" <{inst_set}>"
+        else:
+            label += " <flat>"
+        series[label].append(rec)
+
     for solver_dir in sorted(results_root.iterdir()):
         if not solver_dir.is_dir():
             continue
@@ -64,15 +83,21 @@ def load_series(results_root: Path) -> dict[str, list[dict]]:
             for machine_dir in sorted(version_dir.iterdir()):
                 if not machine_dir.is_dir():
                     continue
-                for json_file in machine_dir.glob("*.json"):
+                # set-nested records
+                for set_dir in sorted(machine_dir.iterdir()):
+                    if not set_dir.is_dir():
+                        continue
+                    for jf in set_dir.glob("*.json"):
+                        try:
+                            push(json.loads(jf.read_text()), set_dir.name, machine_dir)
+                        except (OSError, json.JSONDecodeError):
+                            continue
+                # legacy flat records in the machine dir itself
+                for jf in machine_dir.glob("*.json"):
                     try:
-                        rec = json.loads(json_file.read_text())
+                        push(json.loads(jf.read_text()), None, machine_dir)
                     except (OSError, json.JSONDecodeError):
                         continue
-                    rec.setdefault("solver", solver_dir.name)
-                    rec.setdefault("solver_version", version_dir.name)
-                    rec.setdefault("machine", machine_dir.name)
-                    series[f'{rec["solver"]} {rec["solver_version"]} {rec["machine"][:20]}'].append(rec)
     return dict(series)
 
 
@@ -174,6 +199,64 @@ def format_table(series: dict[str, dict], ref: dict[str, dict] | None) -> str:
     return buf.getvalue()
 
 
+def check_objective_agreement(rows: dict, cols: list[str]) -> list[str]:
+    """Warn when two solvers both hit 'optimal' but disagree on the objective."""
+    warnings: list[str] = []
+    abs_tol, rel_tol = 1e-5, 1e-6
+    for inst, row in rows.items():
+        objs = {}
+        for c in cols:
+            r = row.get(c)
+            if r and str(r.get("status") or "").lower() == "optimal" and \
+                    r.get("objective") is not None:
+                objs[c] = r["objective"]
+        if len(objs) < 2:
+            continue
+        first_label, ref_obj = next(iter(objs.items()))
+        for c, v in objs.items():
+            diff = abs(v - ref_obj)
+            if diff > abs_tol + rel_tol * max(abs(v), abs(ref_obj), 1e-9):
+                warnings.append(
+                    f"{inst}: {c} obj={v:.9g} != {first_label} obj={ref_obj:.9g}")
+    return warnings
+
+
+def print_instance_matrix(series: dict[str, list[dict]]) -> dict:
+    """Print instances x solver-series table (plato-style) from raw records."""
+    cols = list(series.keys())
+    if len(cols) > 8:
+        cols = cols[:8]  # keep widths sane for very wide sets
+    rows: dict[str, dict[str, dict]] = {}
+    for label, recs in series.items():
+        if label not in cols:
+            continue
+        for r in recs:
+            if str(r.get("status") or "").lower() == "error":
+                continue
+            inst = r.get("instance") or "?"
+            rows.setdefault(inst, defaultdict(dict))[label] = r
+    if not rows:
+        return {}
+    instances = sorted(rows)
+    w = max(len(i) for i in instances + ["instance"])
+
+    def cell(r: dict | None) -> str:
+        if r is None:
+            return "--"
+        status = str(r.get("status")).lower()
+        t = r.get("runtime_s")
+        ts = "--" if t is None else f"{float(t):.2f}s"
+        if status in ("optimal", "infeasible", "unbounded"):
+            return f"{ts} {status}"
+        return f"{ts} {status}"
+
+    print("\ninstance".ljust(w), *(c[:18].ljust(18) for c in cols))
+    for inst in instances:
+        print(inst.ljust(w),
+              *(cell(rows[inst].get(c))[:18].ljust(18) for c in cols))
+    return rows
+
+
 def performance_profile(series: dict[str, dict], out_png: Path) -> None:
     """Dolan-More performance profile over instances solved by every series."""
     per_inst: dict[str, dict[str, float]] = defaultdict(dict)
@@ -215,6 +298,9 @@ def main() -> int:
     ap.add_argument("--results-root", type=Path, default=None)
     ap.add_argument("--reference", type=Path, default=None,
                     help="Mittelmann .res table for context (optional)")
+    ap.add_argument("--set", default=None,
+                    help="only summarize records belonging to this test set "
+                         "(omit to include every set)")
     ap.add_argument("--plot", type=Path, default=None,
                     help="output PNG for performance profile")
     args = ap.parse_args()
@@ -228,6 +314,12 @@ def main() -> int:
     if not series:
         print("no result series found")
         return 1
+    if args.set:
+        series = {label: recs for label, recs in series.items()
+                  if any(r.get("instance_set") == args.set for r in recs)}
+        if not series:
+            print(f"no records for set '{args.set}'")
+            return 1
     metrics = {label: series_metrics(recs, time_limit_default=7200.0)
                for label, recs in series.items()}
     for label, recs in series.items():
@@ -240,6 +332,10 @@ def main() -> int:
               f"({next(iter(ref), 'none') if ref else ''})")
 
     print(format_table(metrics, ref))
+
+    rows = print_instance_matrix(series)
+    for warning in check_objective_agreement(rows, list(series)):
+        print(f"  !! objective mismatch: {warning}")
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     summary_dir = rroot / "summary"

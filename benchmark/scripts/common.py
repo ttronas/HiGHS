@@ -14,8 +14,10 @@ from pathlib import Path
 from typing import Any
 
 # Directory layout under a results root:
-#   results/{solver}/{solver_version}/{machine}/{instance}.json
-RESULT_INDEX = ["solver", "solver_version", "machine", "instance"]
+#   results/{solver}/{solver_version}/{machine}/{set}/{instance}.json
+# (`set` is the test-set tag: the folder the problems were dropped into, or an
+# explicit --set name. Legacy flat records without a set dir are still readable.)
+RESULT_INDEX = ["solver", "solver_version", "machine", "set", "instance"]
 
 
 def repo_root() -> Path:
@@ -107,8 +109,11 @@ def save_json(path: Path, record: dict[str, Any]) -> None:
 
 
 def result_path(results_root: Path, solver: str, solver_version: str,
-                machine: str, instance: str) -> Path:
-    return results_root / solver / solver_version / machine / f"{instance}.json"
+                machine: str, instance: str, inst_set: str | None = None) -> Path:
+    base = results_root / solver / solver_version / machine
+    if inst_set:
+        base = base / inst_set
+    return base / f"{instance}.json"
 
 
 def run_capture(cmd: list[str], timeout: float | None = None) -> subprocess.CompletedProcess:
