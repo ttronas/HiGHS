@@ -51,76 +51,6 @@ branch `parallel-redesign2` (commit `51c8819cc9`). Master stays on 1.15.1.3.
 
 ## Version History
 
-### 1.15.1.5 — Audit + GMI cuts + node presolve + debug cleanup
-
-**Audit result**: Verified every "What's Done" entry against the actual source at
-HEAD. All Tier-1 entries (1-5, 6 partial) plus heuristic effort (8) and
-`parallel` default (19) are genuinely implemented. The **GMI cuts entry (9) was
-NOT implemented** — `git grep -i gomory` finds no Gomory/GMI cut generator in any
-commit (`HighsTableauSeparator.cpp` is the base separator only; the 1.15.1.3
-changelog claim was false/never committed). Reimplemented it below. Also found
-leftover debug `printf` in the heap-CHUZC hot path that spams stdout on every
-large-candidate CHUZC (real slowdown).
-
-| Change | File | Impact |
-|--------|------|--------|
-| GMI cuts: standalone `generateGmiCut` — a pure Gomory Mixed-Integer cut (fractional parts of integer-row coefficients) computed directly in original space and added via `cutpool.addCut`, after each standard MIR heuristic (`generateCut`) on the aggregated tableau row. **Superseded by idiomatic `generateGomoryCut` in 1.15.1.6.** | `highs/mip/HighsTableauSeparator.cpp` | Strong single-row Gomory cut always attempted; measured ~3.6x faster than no-GMI on super-fast |
-| Remove debug `printf` in heap-CHUZC path (was unconditional, printed every pivot to stdout) | `highs/simplex/HEkkDualRow.cpp` | Fixes severe stdout-bound slowdown on large LPs |
-| Node/local LP presolve: run solver LP presolve on node solves whose relaxation has ≥ `mip_node_presolve_threshold` nonzeros (default 200000). Presolve re-solves a reduced node model from scratch and postsolves back; it discards the parent warm-start basis, so it is gated on LP size. | `HighsLpRelaxation.cpp` (`run`), `HighsOptions.h` | Shrinks large node relaxations |
-| New option `mip_node_presolve_threshold` (0 disables; default 200000) | `HighsOptions.h` | Tuning knob |
-| `run_benchmark.py`: add `--no-cache` flag (re-benchmark instances that already have a results file) | `benchmark/scripts/run_benchmark.py` | Harness |
-
-**Audit of 1.15.1.3 "GMI cuts" (v1.15.1.3 entry below)**: that entry is
-**false** — no GMI/Gomory cut was ever committed. The 1.15.1.3 commit
-(`6bf8248`) contains only Tier-1 simplex/MIP fixes (CHUZC, freeList, propagate,
-Combinable, march=native, dead code, parallel default, heuristic effort). GMI
-cuts were destroyed before commit and are restored here in 1.15.1.5.
-
-**Benchmark status**: Super-fast MIPLIB2017 subset (135 instances, 60s limit)
-was run on this dev box for the standalone-GMI vs no-GMI and standalone-GMI vs
-CMIR-reroute comparisons above. On 35 instances shared with the 1.15.1.1 (no-GMI)
-`fast` set, the standalone GMI was a median 3.6x faster (ratio 0.276); against
-the working-GMI 1.15.1.3 cache the gap was within run-to-run noise (ratio 1.08).
-Absolute baselines from the original 1.15.1.3/iter4 runs are not reproducible on
-this box (the machine is ~50-200x slower than when recorded), so cross-machine
-absolute comparisons are not meaningful. ctest: 160/168 (8 PDLP failures
-pre-existing).
-
-**A/B note (standalone GMI vs CMIR-reroute)**: a CMIR-reroute variant
-(`generateCut(..., onlyInitialCMIRScale=true)` + an extra aggregation per row)
-was benchmarked head-to-head with the standalone `generateGmiCut` on the
-super-fast subset (60s limit, 62 common instances). The standalone won
-decisively: median ratio 0.021 (~47x faster), 54/62 faster; the reroute hit the
-60s time limit on instances the standalone solves in <0.3s. Caveat: the reroute
-benchmark bundled an extra `getCurrentAggregation` and a third `generateCut` per
-row, so it was not a pure idiom-vs-standalone swap.
-
-**A/B note (idiomatic `generateGomoryCut` vs standalone, clean swap)**: a
-`HighsCutGeneration::generateGomoryCut` method was added (transform ->
-`cmirCutGenerationHeuristic(minEfficacy, true)` directly, skipping cover/lifting
-and delta-search, then `finalizeAndAddCut` for efficacy/duplicate gating) and
-substituted into the exact A structure (2x `generateCut` + 2x GMI). Benchmark
-on super-fast (135 instances, 15s timeout): A/B median 0.47, geomean 0.37,
-A faster on 98/135, shifted-geomean(10) 0.757. The idiomatic path is ~2-3x
-slower than standalone GMI for the short fractional rows the tableau separator
-feeds — the transform/untransform + postprocess + violation/duplicate-gating
-overhead dominates. **Adopted anyway as 1.15.1.6** (deliberate correctness-over-
-raw-speed choice: it inherits complementation, efficacy gating, and duplicate
-detection that the standalone lacks, at the cost of ~2-3x per-cut overhead).
-
-### 1.15.1.6 — Idiomatic Gomory cuts (`generateGomoryCut`)
-
-| Change | File | Impact |
-|--------|------|--------|
-| Add `HighsCutGeneration::generateGomoryCut`: transform row, complement via `preprocessBaseInequality`, generate the pure Gomory cut as `cmirCutGenerationHeuristic(minEfficacy, true)` (MIR at delta=1, skipping cover/lifting and delta-search), untransform, then `finalizeAndAddCut` for efficacy/violation/duplicate gating | `highs/mip/HighsCutGeneration.{h,cpp}` | Idiomatic single-row Gomory cut |
-| Replace standalone `generateGmiCut` with `generateGomoryCut` in the tableau separator (same surrounding structure: 2x `generateCut` + 2x Gomory) | `highs/mip/HighsTableauSeparator.cpp` | GMI now flows through the standard cut pipeline (complementation, efficacy, duplicate gating) |
-| Drop the standalone `generateGmiCut` fast path | `highs/mip/HighsTableauSeparator.cpp` | Removes non-idiomatic bypass of the cut pipeline |
-
-**Benchmark/verification**: 7/7 smoke examples Optimal; ctest 79% / 36 failures
-(identical to baseline 1.15.1.5 — all pre-existing MIP-random-seed/PDLP/unit-test
-failures, none introduced by this change). Super-fast A/B vs standalone GMI:
-see A/B note above (adopted at ~2-3x slower than standalone, deliberate).
-
 ### 1.15.1.0 — Baseline
 
 Upstream HiGHS 1.15.1 (commit `32f8319c5e`). No optimization changes.
@@ -180,6 +110,20 @@ Adds node LP presolve on top of 1.15.1.3 (raw `generateGmiCut` GMI unchanged).
 relaxation exceeds the nonzero threshold. On the super-fast subset, ~17/128
 instances qualify. Compare 1.15.1.3 (no node presolve) vs 1.15.1.5 (node
 presolve) to isolate the effect on those instances.
+
+### 1.15.1.6 — Idiomatic Gomory cut `generateGomoryCut` + node presolve
+
+Swaps the raw `generateGmiCut` fast path for the idiomatic cut-pipeline version.
+Node LP presolve unchanged from 1.15.1.5.
+
+| Change | File | Impact |
+|--------|------|--------|
+| Add `HighsCutGeneration::generateGomoryCut`: transform row, complement via `preprocessBaseInequality`, generate pure Gomory cut as `cmirCutGenerationHeuristic(minEfficacy, true)` (MIR at delta=1, skipping cover/lifting/delta-search), untransform, `finalizeAndAddCut` for efficacy/violation/duplicate gating | `highs/mip/HighsCutGeneration.{h,cpp}` | Idiomatic single-row Gomory cut |
+| Replace standalone `generateGmiCut` with `generateGomoryCut` (same structure: 2x `generateCut` + 2x Gomory) | `highs/mip/HighsTableauSeparator.cpp` | GMI flows through the standard cut pipeline |
+
+**Note**: idiomatic path trades raw speed (~2-3x slower per-cut on short rows)
+for correctness — complementation, efficacy gating, duplicate detection. See
+`docs/optimization-findings.md` for the A/B measurement.
 
 ---
 
