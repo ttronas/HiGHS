@@ -759,7 +759,7 @@ class HighsOptions : public HighsOptionsStruct {
 
     record_string = new OptionRecordString(
         kParallelString, "Parallel: \"off\", \"choose\" or \"on\"", advanced,
-        &parallel, kHighsChooseString);
+        &parallel, kHighsOnString);
     records.push_back(record_string);
 
     record_int = new OptionRecordInt(
@@ -1222,7 +1222,7 @@ class HighsOptions : public HighsOptionsStruct {
 
     record_double = new OptionRecordDouble(
         "mip_heuristic_effort", "Effort spent for MIP heuristics", advanced,
-        &mip_heuristic_effort, 0.0, 0.05, 1.0);
+        &mip_heuristic_effort, 0.0, 0.1, 1.0);
     records.push_back(record_double);
 
     record_bool =

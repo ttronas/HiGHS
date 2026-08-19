@@ -36,6 +36,46 @@ struct FractionalInteger {
       : fractionality(fractionality), score(-1.0), basisIndex(basisIndex) {}
 };
 
+static void generateGmiCut(const HighsMipSolver& mip, HighsCutPool& cutpool,
+                           const std::vector<HighsInt>& inds,
+                           const std::vector<double>& vals, HighsInt numCol,
+                           double fractionality) {
+  double feastol = mip.mipdata_->feastol;
+
+  std::vector<HighsInt> gmiInds;
+  std::vector<double> gmiVals;
+  gmiInds.reserve(inds.size());
+  gmiVals.reserve(inds.size());
+
+  for (size_t i = 0; i < inds.size(); ++i) {
+    if (inds[i] >= numCol) continue;
+
+    HighsInt col = inds[i];
+    if (mip.isColContinuous(col)) continue;
+
+    double a = vals[i];
+    if (std::abs(a) <= feastol) continue;
+
+    double f;
+    if (a > 0) {
+      f = a - std::floor(a);
+    } else {
+      f = std::ceil(a) - a;
+    }
+
+    if (f <= feastol || f >= 1.0 - feastol) continue;
+
+    gmiInds.push_back(col);
+    gmiVals.push_back(f);
+  }
+
+  if (gmiInds.empty()) return;
+
+  HighsInt cutindex = cutpool.addCut(mip, gmiInds.data(), gmiVals.data(),
+                                     gmiInds.size(), fractionality, false);
+  (void)cutindex;
+}
+
 void HighsTableauSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
                                                HighsLpAggregator& lpAggregator,
                                                HighsTransformedLp& transLp,
@@ -232,10 +272,16 @@ void HighsTableauSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
     cutGen.generateCut(transLp, baseRowInds, baseRowVals, rhs);
     if (transLp.getGlobaldom().infeasible()) break;
 
+    generateGmiCut(mip, cutpool, baseRowInds, baseRowVals, numCol,
+                   fracvar.fractionality);
+
     lpAggregator.getCurrentAggregation(baseRowInds, baseRowVals, true);
     rhs = 0;
     cutGen.generateCut(transLp, baseRowInds, baseRowVals, rhs);
     if (transLp.getGlobaldom().infeasible()) break;
+
+    generateGmiCut(mip, cutpool, baseRowInds, baseRowVals, numCol,
+                   fracvar.fractionality);
 
     lpAggregator.clear();
     if (bestScore == -1.0 && cutpool.getNumCuts() != numCuts)

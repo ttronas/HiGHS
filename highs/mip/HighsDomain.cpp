@@ -2390,8 +2390,8 @@ bool HighsDomain::propagate() {
     changedboundsize = std::max(
         changedboundsize, cutpoolprop.cutpool->getMatrix().nonzeroCapacity());
 
-  std::unique_ptr<HighsDomainChange[]> changedbounds(
-      new HighsDomainChange[changedboundsize]);
+  propagateBuffer_.resize(changedboundsize);
+  HighsDomainChange* changedbounds = propagateBuffer_.data();
 
   while (havePropagationRows()) {
     if (objProp_.isActive()) objProp_.propagate();

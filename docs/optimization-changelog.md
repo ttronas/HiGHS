@@ -150,17 +150,22 @@ All changes verified with benchmark harness (smoke + subset).
 - Biggest: `nursesched-sprint02.mps` 440s → 45s (90% faster)
 - Regressions: `piperout-27.mps` 46s → 61s (minor, still solves)
 
-### 1.15.1.3 — Tier 1 remaining (GMI entry RETRACTED)
+### 1.15.1.3 — Tier 1 fixes + raw GMI cut (node presolve OFF)
 
-**Correction**: the original 1.15.1.3 entry claimed "GMI cut generator" — this
-is **false**. Commit `6bf8248` contains only the Tier-1 simplex/MIP fixes and
-no Gomory/GMI code. The GMI cut described here was destroyed before commit and
-is restored in **1.15.1.5** (see above). The benchmark figures quoted below were
-**not reproducible** and are withdrawn.
+Reconstructed commit: Tier-1 hotspot fixes (CHUZC heap sort, freeList packed
+vector, propagate buffer, HighsCombinable fix, march=native opt-in, dead code
+cleanup, `parallel` default on, heuristic effort 0.1) plus a **raw Gomory
+Mixed-Integer cut** `generateGmiCut` in the tableau separator. **Node LP
+presolve is NOT enabled** (feature lands in 1.15.1.5).
 
 | Change | File | Impact |
 |--------|------|--------|
-| (retracted — no GMI was added in 1.15.1.3) | — | — |
+| Raw GMI cut `generateGmiCut`: fractional parts of integer-row coefficients, direct `cutpool.addCut` in original space, after each `generateCut` on the aggregated tableau row | `highs/mip/HighsTableauSeparator.cpp` | Strong single-row Gomory cut |
+| Tier-1 hotspot fixes (see 1.15.1.1/1.15.1.2 rows) | `highs/simplex/`, `highs/mip/`, `highs/parallel/` | Eliminates O(n^2) sort, cache-hostile set, per-call alloc |
+| Version plumbing: `HIGHS_TWEAK` parse + print in `--version` | `cmake/set-version.cmake`, `CMakeLists.txt`, `app/HighsRuntimeOptions.h` | Versioned result dirs |
+
+**Note**: GMI is a *raw* fast path here (bypasses the transform/postprocess cut
+pipeline). The idiomatic `generateGomoryCut` version is 1.15.1.6.
 
 ---
 

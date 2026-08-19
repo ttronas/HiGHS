@@ -88,6 +88,7 @@ class HighsCombinable {
     for (i = 0; i < numThreads; ++i) {
       if (threadCopies_[i].initialized_) {
         combined = std::move(threadCopies_[i].data_);
+        threadCopies_[i].initialized_ = false;
         break;
       }
     }
@@ -96,7 +97,7 @@ class HighsCombinable {
       if (threadCopies_[i].initialized_) {
         combined =
             combine(std::move(combined), std::move(threadCopies_[i].data_));
-        break;
+        threadCopies_[i].initialized_ = false;
       }
     }
 

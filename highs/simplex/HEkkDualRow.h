@@ -11,7 +11,7 @@
 #ifndef SIMPLEX_HEKKDUALROW_H_
 #define SIMPLEX_HEKKDUALROW_H_
 
-#include <set>
+#include <vector>
 #include <vector>
 
 #include "simplex/HEkk.h"
@@ -167,7 +167,9 @@ class HEkkDualRow {
                 //!< ekk_instance_.info_.devex_index_;
 
   // Freelist:
-  std::set<HighsInt> freeList;  //!< Freelist itself
+  std::vector<HighsInt> freeListVec;   //!< Packed freelist
+  std::vector<char> freeListMark;      //!< Mark array for O(1) membership
+  std::vector<HighsInt> freeListPos;   //!< Reverse position map
 
   // packed data:
   HighsInt packCount = 0;           //!< number of packed indices/values
