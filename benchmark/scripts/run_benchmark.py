@@ -129,6 +129,10 @@ def main() -> int:
                          "present in this set's folder before running")
     ap.add_argument("--force", action="store_true",
                     help="ignore cache and re-run every selected instance")
+    ap.add_argument("--no-cache", action="store_true",
+                    help="ignore cached results: re-benchmark instances that "
+                         "already have a results file (identical to --force "
+                         "for the cache-skip decision; kept as a distinct flag)")
     ap.add_argument("--workdir", type=Path, default=None,
                     help="scratch dir for temp files (default $TMPDIR/benchmark)")
     args = ap.parse_args()
@@ -201,7 +205,7 @@ def main() -> int:
             dest = result_path(results_root, solver.name, version, machine,
                                inst.stem, inst_set=inst_set)
             stale = False
-            if dest.exists() and not args.force:
+            if dest.exists() and not args.force and not args.no_cache:
                 old = load_json(dest)
                 key_ok = bool(old and old.get("instance_hash") == ih and
                               old.get("options_hash") == oh)

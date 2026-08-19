@@ -305,10 +305,12 @@ benchmark/.venv/
 __pycache__/
 *.egg-info/
 
-# Downloaded benchmark instances (large, ~317 MB) - fetched by
+# Downloaded benchmark instances (large) - fetched by
 #   uv run python scripts/download_instances.py
 benchmark/.cache/
 benchmark/instances/
+# Extracted/cached MIPLIB2017 data (610 MB) under benchmark/sets/
+benchmark/sets/
 
 # Per-machine solver result caches.
 #   benchmark/results/gurobi/  IS committed (Gurobi reference cache).
@@ -319,7 +321,16 @@ benchmark/results/summary/
 
 # Gurobi licensing - NEVER commit
 benchmark/.env
-benchmark/gurobi.lic
+benchmark/*.lic
+
+# Cached HiGHS build binaries used by the harness - never commit
+benchmark/binaries/
+
+# ccache build cache
+.ccache/
+
+# ctest scratch
+Testing/Temporary/
 
 # Extra build tree used by benchmark/scripts/build_highs.sh --debug
 /build-debug/

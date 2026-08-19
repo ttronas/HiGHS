@@ -1,0 +1,165 @@
+"""Compare HiGHS solver versions across benchmark results.
+
+Reads result records from `results/highs/{version}/{machine}/{set}/{instance}.json`
+and reports, per instance, the absolute runtime and the percentage difference
+between each version and a reference. The reference is either an explicit
+baseline version or the next neighbour in the version list.
+
+Usage examples
+--------------
+Compare each version against an explicit baseline (e.g. no-GMI):
+
+    uv run python scripts/compare_versions.py \\
+        --versions 1.15.1.3 1.15.1.5 1.15.1.6 --baseline 1.15.1.3 \\
+        --set super-fast
+
+Compare each version against its predecessor (next-neighbour chain):
+
+    uv run python scripts/compare_versions.py \\
+        --versions 1.15.1.3 1.15.1.5 1.15.1.6 --mode neighbor \\
+        --set super-fast
+
+For every shared instance the report prints:
+
+    <instance>  <base_s>  <cur_s>   <diff_s>   <diff_pct>
+
+with a trailing aggregate (shifted geomean over the shared instances) for each
+column. Instances solved by only one of the two compared versions are listed
+separately (solved-vs-timeout) and not folded into the ratio.
+"""
+
+from __future__ import annotations
+
+import argparse
+import glob
+import json
+import math
+from pathlib import Path
+from typing import Any
+
+RESULTS_ROOT = Path(__file__).resolve().parents[1] / "results"
+
+
+def shifted_geomean(values: list[float], shift: float = 10.0) -> float:
+    if not values:
+        return float("inf")
+    return math.exp(sum(math.log(v + shift) for v in values) / len(values)) - shift
+
+
+def load_version(version: str, inst_set: str, results_root: Path) -> dict[str, dict[str, Any]]:
+    """Load {instance: record} for one solver version across all machine dirs."""
+    out: dict[str, dict[str, Any]] = {}
+    for f in glob.glob(str(results_root / "highs" / version / "*" / inst_set / "*.json")):
+        try:
+            rec = json.loads(Path(f).read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        if rec.get("solver") and rec["solver"] != "highs":
+            continue
+        out[rec["instance"]] = rec
+    return out
+
+
+def solve_time(rec: dict[str, Any], time_limit_default: float) -> float:
+    """Absolute solve time: runtime for solved, time-limit for timeout/unsolved."""
+    status = (rec.get("status") or "").lower()
+    limit = float(rec.get("time_limit") or time_limit_default)
+    t = rec.get("runtime_s")
+    if t is None:
+        return limit
+    t = float(t)
+    if "limit" in status or "unsolved" in status:
+        return max(t, limit)
+    return t
+
+
+def compare_versions_core(
+    base: dict[str, dict[str, Any]],
+    cur: dict[str, dict[str, Any]],
+    time_limit_default: float,
+) -> tuple[list[str], list[str], list[float], int, int]:
+    """Compare cur against base. Returns report lines, only-version lines,
+    cur runtimes, #shared, #cur-faster."""
+    shared = sorted(set(base) & set(cur))
+    report: list[str] = []
+    times: list[float] = []
+    n_cur_faster = 0
+    for inst in shared:
+        tb = solve_time(base[inst], time_limit_default)
+        tc = solve_time(cur[inst], time_limit_default)
+        times.append(tc)
+        diff = tc - tb
+        pct = (diff / tb * 100.0) if tb > 0 else float("inf")
+        arrow = " <=" if tc < tb - 1e-9 else (" =>" if tc > tb + 1e-9 else "  =")
+        report.append(f"{inst:<40} {tb:>10.3f} {tc:>10.3f} {diff:>+10.3f} {pct:>+9.2f}% {arrow}")
+        if tc < tb - 1e-9:
+            n_cur_faster += 1
+    only: list[str] = []
+    for inst in sorted(set(base) - set(cur)):
+        only.append(f"{inst:<40} base-only  base={solve_time(base[inst], time_limit_default):.3f}s")
+    for inst in sorted(set(cur) - set(base)):
+        only.append(f"{inst:<40} cur-only   cur={solve_time(cur[inst], time_limit_default):.3f}s")
+    return report, only, times, len(shared), n_cur_faster
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Per-version HiGHS result comparison")
+    ap.add_argument("--versions", nargs="+", required=True,
+                    help="solver versions to compare, in order")
+    ap.add_argument("--baseline", default=None,
+                    help="version to compare every other against (default: first "
+                         "in --versions for mode=baseline)")
+    ap.add_argument("--set", required=True, help="result cache set tag (e.g. super-fast)")
+    ap.add_argument("--results-root", type=Path, default=RESULTS_ROOT)
+    ap.add_argument("--mode", choices=["baseline", "neighbor"], default="baseline",
+                    help="baseline: all vs one; neighbor: each vs previous")
+    ap.add_argument("--time-limit", type=float, default=7200.0,
+                    help="default time limit when records lack one")
+    args = ap.parse_args()
+
+    versions = args.versions
+    data = {v: load_version(v, args.set, args.results_root) for v in versions}
+
+    if args.mode == "neighbor":
+        pairs = [(versions[i - 1], versions[i]) for i in range(1, len(versions))]
+    else:
+        base = args.baseline or versions[0]
+        if base not in versions:
+            print(f"error: baseline {base} not in --versions")
+            return 1
+        pairs = [(base, v) for v in versions if v != base]
+
+    print(f"mode={args.mode}  set={args.set}  versions: {', '.join(versions)}")
+    for base_v, cur_v in pairs:
+        base = data.get(base_v, {})
+        cur = data.get(cur_v, {})
+        if not base or not cur:
+            print(f"\n[{base_v} -> {cur_v}] missing results "
+                  f"(base={len(base)}, cur={len(cur)})")
+            continue
+        report, only, times, n_shared, n_faster = compare_versions_core(
+            base, cur, args.time_limit)
+        if not times:
+            print(f"\n[{base_v} -> {cur_v}] no shared instances")
+            continue
+        gmb = shifted_geomean([solve_time(base[i], args.time_limit)
+                               for i in sorted(set(base) & set(cur))])
+        gmc = shifted_geomean(times)
+        print(f"\n{base_v} -> {cur_v}  ({n_shared} shared, {n_faster} cur-faster, "
+              f"{n_shared - n_faster} cur-slower/equal)")
+        print(f"{'instance':<40} {'base_s':>10} {'cur_s':>10} {'diff_s':>10} {'diff_pct':>10}  flag")
+        print("-" * 92)
+        for line in report:
+            print(line)
+        print("-" * 92)
+        print(f"shifted-geomean(10)  base={gmb:.3f}s  cur={gmc:.3f}s  "
+              f"ratio={gmc / gmb if gmb else float('inf'):.4f}")
+        if only:
+            print("\n-- instances present in only one version --")
+            for line in only:
+                print(line)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
