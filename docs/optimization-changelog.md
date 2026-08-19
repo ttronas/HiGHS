@@ -106,10 +106,19 @@ Adds node LP presolve on top of 1.15.1.3 (raw `generateGmiCut` GMI unchanged).
 | Node/local LP presolve: for node solves whose relaxation has ≥ `mip_node_presolve_threshold` nonzeros (default 200000), run LP presolve and re-solve the reduced model from scratch (postsolve back); discards the parent warm-start basis | `highs/mip/HighsLpRelaxation.cpp` | Shrinks large node relaxations |
 | New option `mip_node_presolve_threshold` (0 disables; default 200000) | `highs/lp_data/HighsOptions.h` | Tuning knob |
 
-**Benchmark focus**: node presolve only triggers on instances whose LP
-relaxation exceeds the nonzero threshold. On the super-fast subset, ~17/128
-instances qualify. Compare 1.15.1.3 (no node presolve) vs 1.15.1.5 (node
-presolve) to isolate the effect on those instances.
+**Benchmark (super-fast, 135 instances, 15s limit)** — node-presolve effect on
+raw GMI (1.15.1.3 vs 1.15.1.5):
+- Overall shifted-geomean(10): **1.15.1.3 2.463s → 1.15.1.5 2.370s, ratio 0.962**
+  (70 instances faster, 65 slower) — net slightly positive.
+- **17 large instances (≥200k nz, where node presolve actually engages)**:
+  shifted-geomean(10) **7.742s → 7.193s, ratio 0.929**; summed runtime
+  **136.9s → 126.9s (−10.0s, −7.3%)**. 10 faster, 6 slower, 1 equal.
+  Biggest wins: `rocII-5-11` −24%, `thor50dday` −21%, `ex9` −20%,
+  `rd-rplusc-21` −15%, `neos-662469` −14%. Regressions: `sp98ar` +13.9%,
+  `neos-5093327-huahum` +14.3%.
+- Verdict: node presolve is a net positive specifically on the large-instance
+  subset it targets; the mixed all-instance result reflects the ~17/135
+  instances that actually trigger it.
 
 ### 1.15.1.6 — Idiomatic Gomory cut `generateGomoryCut` + node presolve
 
@@ -121,9 +130,14 @@ Node LP presolve unchanged from 1.15.1.5.
 | Add `HighsCutGeneration::generateGomoryCut`: transform row, complement via `preprocessBaseInequality`, generate pure Gomory cut as `cmirCutGenerationHeuristic(minEfficacy, true)` (MIR at delta=1, skipping cover/lifting/delta-search), untransform, `finalizeAndAddCut` for efficacy/violation/duplicate gating | `highs/mip/HighsCutGeneration.{h,cpp}` | Idiomatic single-row Gomory cut |
 | Replace standalone `generateGmiCut` with `generateGomoryCut` (same structure: 2x `generateCut` + 2x Gomory) | `highs/mip/HighsTableauSeparator.cpp` | GMI flows through the standard cut pipeline |
 
-**Note**: idiomatic path trades raw speed (~2-3x slower per-cut on short rows)
-for correctness — complementation, efficacy gating, duplicate detection. See
-`docs/optimization-findings.md` for the A/B measurement.
+**Benchmark (super-fast, 135 instances, 15s)** — GMI approach with node
+presolve on (1.15.1.5 vs 1.15.1.6): shifted-geomean(10) **2.370s → 6.853s,
+ratio 2.891**. The idiomatic `generateGomoryCut` is ~2.9x **slower** than the
+raw `generateGmiCut` (15 faster, 120 slower). The transform/untransform +
+postprocess + violation/duplicate-gating overhead dominates on the short
+fractional rows the tableau separator feeds. **Verdict: idiomatic path is
+correct but materially slower — keep raw GMI for performance; idiomatic is a
+correctness-grade fallback.**
 
 ---
 

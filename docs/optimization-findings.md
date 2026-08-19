@@ -76,6 +76,33 @@ cutpool.addCut(...)            # returns -1 if duplicate -> cut rejected
 
 **Current version**: 1.15.1.6 (see `Version.txt`)
 
+### Version matrix (reconstructed clean history)
+
+| Version | GMI | Node presolve | Commit |
+|---------|-----|---------------|--------|
+| 1.15.1.3 | raw `generateGmiCut` | OFF | Tier-1 + raw GMI |
+| 1.15.1.5 | raw `generateGmiCut` | ON (threshold 200000) | + node LP presolve |
+| 1.15.1.6 | idiomatic `generateGomoryCut` | ON | swap GMI to pipeline |
+
+### Benchmark results (super-fast, 135 instances, 15s limit)
+
+**Node presolve effect** (1.15.1.3 → 1.15.1.5, same raw GMI):
+- All 135: shifted-geomean(10) 2.463s → 2.370s (**ratio 0.962**, 70 faster).
+- On the 17 large instances (≥200k nz) node presolve targets: 7.742s → 7.193s
+  (**ratio 0.929**), summed 136.9s → 126.9s (**−10.0s, −7.3%**). 10 faster /
+  6 slower / 1 equal. Node presolve is a net positive on the big subset it
+  targets.
+
+**GMI approach effect** (1.15.1.5 → 1.15.1.6, node presolve on):
+- shifted-geomean(10) 2.370s → 6.853s (**ratio 2.891**). Idiomatic
+  `generateGomoryCut` is ~2.9x **slower** than raw `generateGmiCut` (15 faster /
+  120 slower). Transform + postprocess + violation/duplicate-gating overhead
+  dominates on short rows.
+
+**Verdict**: raw `generateGmiCut` (1.15.1.5) is the performance winner. Node
+presolve helps specifically on large instances. Idiomatic GMI is correctness-
+grade but materially slower.
+
 ### What's Implemented
 
 | Item | Version | Change | Impact |
