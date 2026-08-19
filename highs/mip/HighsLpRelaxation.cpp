@@ -1211,8 +1211,25 @@ HighsLpRelaxation::Status HighsLpRelaxation::run(bool resolve_on_error) {
           int(mipsolver.profiling_->myThread()),
           mipsolver.submip ? "sub-" : "");
     mipsolver.profiling_->setSubMip(profiling_submip);
+    // Node/local presolve: for sufficiently large node LP relaxations, run the
+    // LP presolve and re-solve the reduced model from scratch. The presolve
+    // (with postsolve) is transparent to the LP model, but it discards the
+    // parent warm-start basis, so only apply it at node solves (after the root)
+    // once the relaxation is large enough to amortize that cost.
+    const HighsInt node_presolve_threshold =
+        mipsolver.options_mip_->mip_node_presolve_threshold;
+    std::string stored_presolve;
+    bool enable_node_presolve =
+        this->solved_first_lp && node_presolve_threshold > 0 &&
+        lpsolver.getNumNz() >= node_presolve_threshold;
+    if (enable_node_presolve) {
+      lpsolver.getOptionValue("presolve", stored_presolve);
+      lpsolver.setOptionValue("presolve", kHighsOnString);
+    }
     mipsolver.profiling_->solveCall("LP2", mipsolver.submip);
     callstatus = lpsolver.optimizeLp();
+    if (enable_node_presolve)
+      lpsolver.setOptionValue("presolve", stored_presolve);
   }
   // Revert the value of lpsolver.options_.solver
   lpsolver.setOptionValue("solver", solver);

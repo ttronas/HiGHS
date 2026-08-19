@@ -167,6 +167,20 @@ presolve is NOT enabled** (feature lands in 1.15.1.5).
 **Note**: GMI is a *raw* fast path here (bypasses the transform/postprocess cut
 pipeline). The idiomatic `generateGomoryCut` version is 1.15.1.6.
 
+### 1.15.1.5 — Node LP presolve + raw GMI
+
+Adds node LP presolve on top of 1.15.1.3 (raw `generateGmiCut` GMI unchanged).
+
+| Change | File | Impact |
+|--------|------|--------|
+| Node/local LP presolve: for node solves whose relaxation has ≥ `mip_node_presolve_threshold` nonzeros (default 200000), run LP presolve and re-solve the reduced model from scratch (postsolve back); discards the parent warm-start basis | `highs/mip/HighsLpRelaxation.cpp` | Shrinks large node relaxations |
+| New option `mip_node_presolve_threshold` (0 disables; default 200000) | `highs/lp_data/HighsOptions.h` | Tuning knob |
+
+**Benchmark focus**: node presolve only triggers on instances whose LP
+relaxation exceeds the nonzero threshold. On the super-fast subset, ~17/128
+instances qualify. Compare 1.15.1.3 (no node presolve) vs 1.15.1.5 (node
+presolve) to isolate the effect on those instances.
+
 ---
 
 ## Implemented Changes (for new agents)
