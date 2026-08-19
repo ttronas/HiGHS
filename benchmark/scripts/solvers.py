@@ -98,7 +98,7 @@ class HiGHSSolver(Solver):
     def version(self) -> str:
         if self._version is None:
             proc = run_capture([str(self.executable), "--version"], timeout=30)
-            match = re.search(r"(\d+\.\d+\.\d+)", proc.stdout)
+            match = re.search(r"(\d+\.\d+\.\d+(?:\.\d+)?)", proc.stdout)
             self._version = match.group(1) if match else "unknown"
         return self._version
 
