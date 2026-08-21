@@ -73,15 +73,15 @@ def main() -> int:
         record["runtime_s"] = float(model.Runtime)
     except Exception:  # noqa: BLE001
         record["runtime_s"] = None
-    record["objective"] = _opt_float(model.ObjVal)
-    record["objbound"] = _opt_float(model.ObjBound)
-    record["mipgap"] = _opt_float(model.MIPGap)
+    record["objective"] = _opt_float(getattr(model, "ObjVal", None))
+    record["objbound"] = _opt_float(getattr(model, "ObjBound", None))
+    record["mipgap"] = _opt_float(getattr(model, "MIPGap", None))
     try:
         record["nodecount"] = int(model.NodeCount)
     except Exception:  # noqa: BLE001
         record["nodecount"] = None
-    record["barrier_iter"] = _opt_int(model.BarIterCount)
-    record["simplex_iter"] = _opt_int(model.IterCount)
+    record["barrier_iter"] = _opt_int(getattr(model, "BarIterCount", None))
+    record["simplex_iter"] = _opt_int(getattr(model, "IterCount", None))
     try:
         record["gurobi_version"] = ".".join(str(v) for v in gp.gurobi.version())
     except Exception:  # noqa: BLE001
@@ -94,14 +94,14 @@ def _opt_float(value) -> float | None:
     try:
         f = float(value)
         return f
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, AttributeError):
         return None
 
 
 def _opt_int(value) -> int | None:
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, AttributeError):
         return None
 
 

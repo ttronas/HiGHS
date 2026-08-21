@@ -1,0 +1,22 @@
+{
+  "dual_bound": 26374.0,
+  "gap": 0.0,
+  "gurobi_error": null,
+  "instance": "air05.mps",
+  "instance_file": "sets/miplib2017-benchmark/air05.mps.gz",
+  "instance_hash": "8e03d2b90834dc1fe15c908247fdd8baf76e208aa310508caa0734e5245692cc",
+  "instance_set": "miplib2017",
+  "machine": "13th-gen-intel-r-core-tm-i7-1355u-12cpu-15-5g",
+  "mip_gap_tol": 0.0001,
+  "nodes": 550,
+  "objective": 26374.0,
+  "options_hash": "4e9294bae8cb42af",
+  "returncode": 0,
+  "run_date": "2026-08-21T04:12:14+00:00",
+  "runtime_s": 7.754626989364624,
+  "solver": "gurobi",
+  "solver_version": "12.0.3",
+  "status": "optimal",
+  "threads": 12,
+  "time_limit": 60.0
+}

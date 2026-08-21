@@ -1,0 +1,22 @@
+{
+  "dual_bound": -3482.0,
+  "gap": 0.10750636132315522,
+  "gurobi_error": null,
+  "instance": "k1mushroom.mps",
+  "instance_file": "sets/miplib2017-benchmark/k1mushroom.mps.gz",
+  "instance_hash": "c610c5ad663b16ffd99faea168daa42f3a6cb0364c3592fd57bf92bc28eae516",
+  "instance_set": "miplib2017",
+  "machine": "13th-gen-intel-r-core-tm-i7-1355u-12cpu-15-5g",
+  "mip_gap_tol": 0.0001,
+  "nodes": 1,
+  "objective": -3144.0,
+  "options_hash": "4e9294bae8cb42af",
+  "returncode": 0,
+  "run_date": "2026-08-21T04:58:47+00:00",
+  "runtime_s": 60.032959938049316,
+  "solver": "gurobi",
+  "solver_version": "12.0.3",
+  "status": "time_limit",
+  "threads": 12,
+  "time_limit": 60.0
+}

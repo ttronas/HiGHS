@@ -1,0 +1,22 @@
+{
+  "dual_bound": 59885.0,
+  "gap": Infinity,
+  "gurobi_error": null,
+  "instance": "neos-3216931-puriri.mps",
+  "instance_file": "sets/miplib2017-benchmark/neos-3216931-puriri.mps.gz",
+  "instance_hash": "c16b3b767bd5ad71da47d9c2d22dda4bc4d1ea5887b38200659f66d35697bb55",
+  "instance_set": "miplib2017",
+  "machine": "13th-gen-intel-r-core-tm-i7-1355u-12cpu-15-5g",
+  "mip_gap_tol": 0.0001,
+  "nodes": 29,
+  "objective": Infinity,
+  "options_hash": "4e9294bae8cb42af",
+  "returncode": 0,
+  "run_date": "2026-08-21T05:21:21+00:00",
+  "runtime_s": 60.029399156570435,
+  "solver": "gurobi",
+  "solver_version": "12.0.3",
+  "status": "time_limit",
+  "threads": 12,
+  "time_limit": 60.0
+}

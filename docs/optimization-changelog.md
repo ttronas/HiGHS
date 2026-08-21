@@ -38,9 +38,24 @@ parser chokes on them (`got 'PS'`). Use `HighsMipSolver run` not
 | 1.15.1.5 | raw `generateGmiCut` | ON |
 | 1.15.1.6 | idiomatic `generateGomoryCut` | ON |
 
-## Rejected experiments
+## Harness changes (no version bump — benchmark infra only)
 
-### 1.15.1.4 — Parallel MIP redesign (`parallel-redesign` branch port)
+Changes to the benchmark harness, not the solver. No `HIGHS_TWEAK` bump, no
+`Version.txt` change, no solver optimization.
+
+| Change | File | Effect |
+|--------|------|--------|
+| `--instances-file` support + canonical set names | `run_benchmark.py` | run a `.txt` instance list; result set auto-named (`fast`/`super-fast`/`miplib2017`) |
+| Multi-root instance resolution | `run_benchmark.py` | list names resolved across examples + miplib set folders |
+| Rebuilt baseline binary `highs-1.15.1` static | `binaries/` | old binaries were dynamically linked to missing `libhighs.so.1` and crashed; rebuilt from tag `v1.15.1` |
+| `--solved-only` default in `compare_versions.py` | `compare_versions.py` | timeouts excluded from shared set + geomean (true solve time unknown; 60s is a lower bound). `--include-timeouts` restores fold-at-cap |
+| Cross-solver compare | `compare_versions.py` | `solver:version` spec, e.g. `gurobi:12.0.3`, plus `--solver` |
+| Gurobi runner: guard `ObjVal`/`ObjBound` | `gurobi_runner.py` | infeasible models have no `ObjVal`; unguarded access crashed the worker → false "error" status |
+
+Full MIPLIB2017 clean run (240 inst, 60s limit) for all 5 HiGHS versions +
+Gurobi recorded in `optimization-findings.md`.
+
+## Rejected experiments
 
 Ported upstream `parallel-redesign` MIP core onto 1.15.1.3 (12 files under
 `highs/mip/`; worker count = num_threads, per-worker processedNodes stash,

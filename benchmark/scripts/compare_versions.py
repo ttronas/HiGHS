@@ -46,18 +46,24 @@ def shifted_geomean(values: list[float], shift: float = 10.0) -> float:
     return math.exp(sum(math.log(v + shift) for v in values) / len(values)) - shift
 
 
-def load_version(version: str, inst_set: str, results_root: Path) -> dict[str, dict[str, Any]]:
+def load_version(version: str, inst_set: str, results_root: Path,
+                 solver: str = "highs") -> dict[str, dict[str, Any]]:
     """Load {instance: record} for one solver version across all machine dirs."""
     out: dict[str, dict[str, Any]] = {}
-    for f in glob.glob(str(results_root / "highs" / version / "*" / inst_set / "*.json")):
+    for f in glob.glob(str(results_root / solver / version / "*" / inst_set / "*.json")):
         try:
             rec = json.loads(Path(f).read_text())
         except (OSError, json.JSONDecodeError):
             continue
-        if rec.get("solver") and rec["solver"] != "highs":
+        if rec.get("solver") and rec["solver"] != solver:
             continue
         out[rec["instance"]] = rec
     return out
+
+
+def is_solved(rec: dict[str, Any]) -> bool:
+    status = (rec.get("status") or "").lower()
+    return bool(status) and "limit" not in status and "unsolved" not in status
 
 
 def solve_time(rec: dict[str, Any], time_limit_default: float) -> float:
@@ -77,10 +83,13 @@ def compare_versions_core(
     base: dict[str, dict[str, Any]],
     cur: dict[str, dict[str, Any]],
     time_limit_default: float,
+    solved_only: bool = False,
 ) -> tuple[list[str], list[str], list[float], int, int]:
     """Compare cur against base. Returns report lines, only-version lines,
     cur runtimes, #shared, #cur-faster."""
     shared = sorted(set(base) & set(cur))
+    if solved_only:
+        shared = [i for i in shared if is_solved(base[i]) and is_solved(cur[i])]
     report: list[str] = []
     times: list[float] = []
     n_cur_faster = 0
@@ -99,6 +108,12 @@ def compare_versions_core(
         only.append(f"{inst:<40} base-only  base={solve_time(base[inst], time_limit_default):.3f}s")
     for inst in sorted(set(cur) - set(base)):
         only.append(f"{inst:<40} cur-only   cur={solve_time(cur[inst], time_limit_default):.3f}s")
+    if solved_only:
+        both = set(base) & set(cur)
+        skipped = sorted(b for b in both if not (is_solved(base[b]) and is_solved(cur[b])))
+        for inst in skipped:
+            only.append(f"{inst:<40} timeout    base={solve_time(base[inst], time_limit_default):.3f}s "
+                        f"cur={solve_time(cur[inst], time_limit_default):.3f}s")
     return report, only, times, len(shared), n_cur_faster
 
 
@@ -106,6 +121,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Per-version HiGHS result comparison")
     ap.add_argument("--versions", nargs="+", required=True,
                     help="solver versions to compare, in order")
+    ap.add_argument("--solver", default="highs",
+                    help="solver whose results to load (default highs)")
     ap.add_argument("--baseline", default=None,
                     help="version to compare every other against (default: first "
                          "in --versions for mode=baseline)")
@@ -115,10 +132,22 @@ def main() -> int:
                     help="baseline: all vs one; neighbor: each vs previous")
     ap.add_argument("--time-limit", type=float, default=7200.0,
                     help="default time limit when records lack one")
+    ap.add_argument("--solved-only", action="store_true", default=True,
+                    help="compare only instances solved by both solvers "
+                         "(default on; timeouts excluded)")
+    ap.add_argument("--include-timeouts", dest="solved_only", action="store_false",
+                    help="include timeout/unsolved instances (counted at time limit)")
     args = ap.parse_args()
 
     versions = args.versions
-    data = {v: load_version(v, args.set, args.results_root) for v in versions}
+    def split_spec(spec: str) -> tuple[str, str]:
+        if ":" in spec:
+            solver, version = spec.split(":", 1)
+            return solver, version
+        return args.solver, spec
+    specs = [split_spec(v) for v in versions]
+    data = {v: load_version(version, args.set, args.results_root, solver)
+            for v, (solver, version) in zip(versions, specs)}
 
     if args.mode == "neighbor":
         pairs = [(versions[i - 1], versions[i]) for i in range(1, len(versions))]
@@ -138,12 +167,16 @@ def main() -> int:
                   f"(base={len(base)}, cur={len(cur)})")
             continue
         report, only, times, n_shared, n_faster = compare_versions_core(
-            base, cur, args.time_limit)
+            base, cur, args.time_limit, args.solved_only)
         if not times:
             print(f"\n[{base_v} -> {cur_v}] no shared instances")
             continue
+        shared_insts = sorted(set(base) & set(cur))
+        if args.solved_only:
+            shared_insts = [i for i in shared_insts
+                            if is_solved(base[i]) and is_solved(cur[i])]
         gmb = shifted_geomean([solve_time(base[i], args.time_limit)
-                               for i in sorted(set(base) & set(cur))])
+                               for i in shared_insts])
         gmc = shifted_geomean(times)
         print(f"\n{base_v} -> {cur_v}  ({n_shared} shared, {n_faster} cur-faster, "
               f"{n_shared - n_faster} cur-slower/equal)")
@@ -155,7 +188,9 @@ def main() -> int:
         print(f"shifted-geomean(10)  base={gmb:.3f}s  cur={gmc:.3f}s  "
               f"ratio={gmc / gmb if gmb else float('inf'):.4f}")
         if only:
-            print("\n-- instances present in only one version --")
+            label = "instances excluded (timeout/unsolved or one version only)" \
+                if args.solved_only else "instances present in only one version"
+            print(f"\n-- {label} --")
             for line in only:
                 print(line)
     return 0

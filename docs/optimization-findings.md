@@ -76,6 +76,45 @@ cutpool.addCut(...)            # returns -1 if duplicate -> cut rejected
 
 **Current version**: 1.15.1.6 (see `Version.txt`)
 
+### Full MIPLIB2017 benchmark (240 instances, 60s limit, 12 threads)
+
+Clean run on the full 240-instance MIPLIB2017 benchmark set (set tag
+`miplib2017`, per-instance 60s time limit, 12 threads, 1e-4 MIP gap), all
+five HiGHS versions + Gurobi 12.0.3, single-solver sequential (no overlap).
+
+Solved counts (shifted-geomean(10) in parentheses):
+
+| solver/version | n | solved | scaled geomean |
+|---|---|---|---|
+| gurobi 12.0.3 | 240 | 98 (96 opt + 2 infeasible) | 33.1 |
+| highs 1.15.1 (baseline) | 240 | 34 | 56.5 |
+| highs 1.15.1.3 (raw GMI) | 238 | 161 | 17.3 |
+| highs 1.15.1.4 (parallel-redesign) | 236 | 34 | 55.9 |
+| highs 1.15.1.5 (raw GMI + node presolve) | 240 | 157 | 18.2 |
+| highs 1.15.1.6 (idiomatic GMI) | 238 | 117 | 27.7 |
+
+**vs baseline 1.15.1** (solved-only, both-solved shared instances):
+- 1.15.1.3: ratio **0.19** (29 faster / 2 slower, 31 shared)
+- 1.15.1.4: ratio **4.25** (rejected — parallel-redesign slower)
+- 1.15.1.5: ratio **0.32** (28/7, 35 shared)
+- 1.15.1.6: ratio **1.65** (52/60, 112 shared) — idiomatic GMI slower than raw
+
+**vs Gurobi 12.0.3** (solved-only):
+- 1.15.1.3: **0.49** (55/24, 79 shared)
+- 1.15.1.5: **0.52** (49/28, 77 shared)
+- 1.15.1.6: **0.79** (38/30, 68 shared)
+- 1.15.1 / 1.15.1.4: 4.0 / 3.6 — far behind Gurobi
+
+Verdict: raw-GMI versions (.3/.5) beat Gurobi ~2x on the solved subset and
+roughly halve shifted-geomean vs baseline. The idiomatic `.6` GMI is correct
+but slower. `.4` (parallel-redesign) is rejected.
+
+**Note on comparison method**: `compare_versions.py` now defaults to
+`solved-only` — timeouts are excluded from the shared set and geomean (their
+true solve time is unknown; 60s is a lower bound, not an estimate). Use
+`--include-timeouts` to fold timeouts in at the cap (old behavior). This
+changes which instances are compared, so ratios here are solved-only.
+
 ### Version matrix (reconstructed clean history)
 
 | Version | GMI | Node presolve | Commit |

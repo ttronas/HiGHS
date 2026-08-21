@@ -48,7 +48,7 @@ one version bump = one changelog entry. Update the "Current Status" table in
 1. Build:           ./benchmark/scripts/build_highs.sh
 2. Smoke (7 MIPs):  cd benchmark && uv run python scripts/run_benchmark.py --instances-root examples
 3. Iteration bench: cd benchmark && uv run python scripts/run_benchmark.py \
-                        --instances-file super-fast-instances.txt --time-limit 15 --set iterN
+                        --instances-file super-fast-instances.txt --time-limit 15
 4. Summarize:       cd benchmark && uv run python scripts/summarize.py
 5. Compare:         cd benchmark && uv run python scripts/compare_versions.py \
                         --versions <base> <cur> --set iterN
@@ -58,6 +58,20 @@ one version bump = one changelog entry. Update the "Current Status" table in
 
 Single-instance debug: `--instance <NAME>`. Re-run cached: `--force`. Full
 240-run: only on explicit request.
+
+## Comparison method (defaults)
+
+- `compare_versions.py` defaults to `--solved-only`: instances where either
+  solver times out are **excluded** from the shared set and geomean. A 60s
+  timeout is a lower bound, not an estimate — counting it at 60s would
+  underestimate the true gap. Use `--include-timeouts` to fold timeouts in at
+  the cap (old behavior).
+- Cross-solver compare via `solver:version`, e.g.
+  `compare_versions.py --versions gurobi:12.0.3 highs:1.15.1.3 --baseline gurobi:12.0.3`.
+- Result set names are canonical: `fast-instances.txt` → `fast`,
+  `super-fast-instances.txt` → `super-fast`, `sets/miplib2017-benchmark` →
+  `miplib2017`. Passed via `--instances-file` or `--instances-root`;
+  `--set` override only for ad-hoc sources.
 
 ## Pitfalls (also in changelog Learnings)
 

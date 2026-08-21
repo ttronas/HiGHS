@@ -44,6 +44,42 @@ def discover_instances(inst_root: Path) -> list[Path]:
     return sorted(set(p for p in inst_root.rglob("*") if p.is_file() and _is_model(p)))
 
 
+def canonical_set_name(source: Path) -> str:
+    name = source.stem if source.is_file() else source.name
+    if name.endswith("-instances"):
+        name = name[:-len("-instances")]
+    return {"miplib2017-benchmark": "miplib2017"}.get(name, name)
+
+
+def instances_from_file(instances_file: Path, roots: list[Path]) -> list[Path]:
+    indexed: dict[str, list[Path]] = {}
+    for root in roots:
+        for instance in discover_instances(root.resolve()):
+            indexed.setdefault(model_key(instance).lower(), []).append(instance)
+
+    instances: list[Path] = []
+    seen: set[Path] = set()
+    missing: list[str] = []
+    for raw in instances_file.read_text().splitlines():
+        entry = raw.split("#", 1)[0].strip()
+        if not entry:
+            continue
+        key = model_key(Path(entry)).lower()
+        matches = indexed.get(key, [])
+        if not matches:
+            missing.append(entry)
+            continue
+        if len(matches) > 1:
+            raise ValueError(f"ambiguous instance '{entry}': {matches}")
+        instance = matches[0]
+        if instance not in seen:
+            instances.append(instance)
+            seen.add(instance)
+    if missing:
+        raise ValueError(f"instances not found: {', '.join(missing)}")
+    return instances
+
+
 def _is_model(p: Path) -> bool:
     name = p.name.lower()
     if name.endswith((".mps", ".lp")):
@@ -102,8 +138,11 @@ def main() -> int:
     ap.add_argument("--solver", nargs="+", choices=KNOWN_SOLVERS,
                     default=["highs", "gurobi"], metavar="NAME",
                     help="solvers to run (default: highs gurobi)")
-    ap.add_argument("--instances-root", type=Path, default=None,
-                    help="directory with instance files " f"(default {instances_dir()})")
+    ap.add_argument("--instances-root", type=Path, action="append", default=None,
+                    help="directory with instance files; may repeat "
+                         f"(default {instances_dir()})")
+    ap.add_argument("--instances-file", type=Path, default=None,
+                    help="file listing instance names; derives result set name")
     ap.add_argument("--results-root", type=Path, default=None,
                     help="root for result caches (default {results_dir()})")
     ap.add_argument("--highs-bin", type=Path, default=None,
@@ -121,9 +160,7 @@ def main() -> int:
     ap.add_argument("--instance", action="append", default=[], metavar="NAME",
                     help="only run the named instance(s); may repeat")
     ap.add_argument("--set", default=None, metavar="NAME",
-                    help="test-set tag for the cache path (default: the name of "
-                         "--instances-root), so dropped problems never collide "
-                         "with other sets' caches")
+                    help="test-set tag override for ad-hoc sources")
     ap.add_argument("--prune", action="store_true",
                     help="delete cached results for instances that are no longer "
                          "present in this set's folder before running")
@@ -137,25 +174,51 @@ def main() -> int:
                     help="scratch dir for temp files (default $TMPDIR/benchmark)")
     args = ap.parse_args()
 
-    inst_root = args.instances_root or instances_dir()
+    repo = Path(__file__).resolve().parents[2]
+    roots = args.instances_root or [instances_dir()]
+    if len(roots) > 1 and not args.instances_file:
+        print("error: multiple --instances-root requires --instances-file")
+        return 1
+    inst_root = roots[0]
     results_root = args.results_root or results_dir()
-    inst_set = args.set or inst_root.name
-    highs_bin = args.highs_bin or (inst_root.parent.parent / "build" / "bin" / "highs")
-    if not Path(highs_bin).exists():
-        # fall back to common repo layout
-        repo = Path(__file__).resolve().parents[2]
-        highs_bin = repo / "build" / "bin" / "highs"
+    source = args.instances_file or inst_root
+    expected_set = canonical_set_name(source)
+    if args.set and expected_set in {"fast", "super-fast", "miplib2017"} and \
+            args.set != expected_set:
+        print(f"error: {source.name} requires result set '{expected_set}'")
+        return 1
+    inst_set = args.set or expected_set
+    highs_bin = args.highs_bin or (repo / "build" / "bin" / "highs")
 
     solvers = make_solvers(args.solver, Path(highs_bin))
 
-    instances = discover_instances(inst_root)
+    if args.instances_file:
+        if not args.instances_file.is_file():
+            print(f"instances file not found: {args.instances_file}")
+            return 1
+        search_roots = roots + [
+            repo / "benchmark" / "examples",
+            repo / "benchmark" / "sets" / "miplib2017-benchmark",
+        ]
+        unique_roots: list[Path] = []
+        for root in search_roots:
+            resolved_root = root.resolve()
+            if resolved_root not in unique_roots:
+                unique_roots.append(resolved_root)
+        try:
+            instances = instances_from_file(args.instances_file, unique_roots)
+        except (OSError, ValueError) as exc:
+            print(f"error: {exc}")
+            return 1
+    else:
+        instances = discover_instances(inst_root)
     if not instances:
-        print(f"no instances found under {inst_root}")
+        print(f"no instances found under {source}")
         print("run:  uv run python scripts/download_instances.py")
         return 1
 
     if args.instance:
-        wanted = {w.lower() for w in args.instance}
+        wanted = {model_key(Path(w)).lower() for w in args.instance}
         instances = [p for p in instances if model_key(p).lower() in wanted]
         have = {model_key(p).lower() for p in instances}
         if wanted != have:
