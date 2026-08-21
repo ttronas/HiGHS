@@ -56,6 +56,21 @@ one version bump = one changelog entry. Update the "Current Status" table in
 7. Update changelog + findings, then commit
 ```
 
+## Commit policy (success vs failure)
+
+Do NOT stash or delete tested feature files — keep them for future analysis.
+
+- **Not successful / performance decrease**: commit the *feature code* to a
+  separate branch `failed/<feature-name>/<version>` (note: git disallows `:`
+  in branch names, use `/` instead). Do NOT merge. Add the learning + status to
+  `docs/optimization-findings.md` and `docs/optimization-changelog.md` on the
+  **master** branch, then commit those doc changes to master.
+- **Successful**: bump the version (per Version convention) and commit the new
+  version to the **master** branch; also update `docs/optimization-changelog.md`
+  and `docs/optimization-findings.md`.
+- Never stash or revert tested feature work — it is analysis fodder. Always land
+  it on a branch and document it.
+
 Single-instance debug: `--instance <NAME>`. Re-run cached: `--force`. Full
 240-run: only on explicit request.
 

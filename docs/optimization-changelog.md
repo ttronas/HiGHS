@@ -64,6 +64,30 @@ all-workers heuristics, deterministic early termination). Built clean, ctest
 than 1.15.1.3 on the MIPLIB2017 fast subset both times. Work preserved on
 branch `parallel-redesign2` (commit `51c8819cc9`). Master stays on 1.15.1.3.
 
+### 1.15.1.7 (aborted) — `parallel=auto` worker-count scaling
+
+Attempted to make parallelism adaptive. Added `kHighsAutoString="auto"` to
+`parallel` option (default), validator acceptance, and two worker-count variants
+in `HighsMipSolver::getMaxNumWorkers()` (baseline: fixed `ceil(1.7*threads)`=21
+workers on 12 threads). **Aborted — never committed, all code reverted.**
+
+Variant A (size-scaled): log-scale worker ceiling across nonzero count
+`[1e3, 2e6]`, 1 → full. Variant B (contention cap): `min(num_threads, 1.7×)` =
+12 workers.
+
+**Full-set benchmark (240 MIPLIB2017, 60s, 12 threads)** vs 1.15.1.6:
+- shifted-geomean(10) **5.283s → 8.921s, ratio 1.69** — regression
+- 98 shared, **96 slower / 2 faster**
+
+**Verdict**: both worker-count reductions regress on the full 240-set. MIPLIB
+instances are *tree-search-bound*, not size-bound — a tiny matrix (e.g. `neos5`,
+2016 nz) still branches into a huge tree and needs all 21 workers; `neos5`
+solves in ~12s with `on` but times out with ~3 workers. The changelog's older
+claim "parallel `on` hurts small instances" does **not** hold on the full
+240-set. The 1.7× over-subscription is latency-hiding/load-balance headroom
+across node-queue stalls, not wasted contention. Baseline `parallel="on"`
+(1.7×) is empirically best; worker-count is the wrong lever.
+
 ## Version History
 
 ### 1.15.1.0 — Baseline
@@ -202,4 +226,6 @@ Check `git branch -r` before starting any Tier 2 item.
 - **HighsCombinable::combine**: check ALL thread copies, not just first two.
 - **CHUZC threshold**: 100 is a starting point; profile before adjusting.
 - **parallel default**: changing from "choose" to "on" makes MIP use all threads by default; affects small instances negatively due to overhead.
+- **worker-count ≠ performance (1.15.1.7)**: MIPLIB2017 is tree-search-bound, not size-bound. `getMaxNumWorkers()` ceiling is fixed at `ceil(1.7*threads)` regardless of matrix size; only the *actual* spawn is demand-driven by live open-node count (`HighsMipSolver.cpp:1000`). Both a size-scaled ceiling and a `num_threads` cap regressed the full 240-set (ratio 1.69). Keep `on` (1.7× over-subscription) — it is load-balancing headroom, not wasted contention. Do NOT gate worker count on matrix nonzeros.
+- **sync less ≠ free**: batching cut/domain sync (parallel-redesign) trades sync cost for staleness (subtree redundancy + discarded buffered `processedNodes` on early termination). Batch size is a U-curve (`cost = c1/batch + c2*batch`), optimum unknown — sweep {1,10,50,100,500} on the large subset before trusting 100. Nodes are NOT generated blindly: children only branch after evaluation gates them (suboptimal→stash, pruned→backtrack).
 - **parallel-redesign**: upstream's per-worker nodequeue → processedNodes batch stash, `maxNodesPerWorkerLim=100` ramp-up, and 1:1 thread mapping were **measured slower** than the vanilla 1.15.1.3 parallel path (2 benchmark runs). Benchmark any parallel-MIP change on a quiet machine with a real 1.15.1.3 baseline before adopting — do not cherry-pick upstream parallel redesign blindly.

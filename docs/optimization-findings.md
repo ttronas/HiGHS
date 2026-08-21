@@ -109,6 +109,30 @@ Verdict: raw-GMI versions (.3/.5) beat Gurobi ~2x on the solved subset and
 roughly halve shifted-geomean vs baseline. The idiomatic `.6` GMI is correct
 but slower. `.4` (parallel-redesign) is rejected.
 
+### 1.15.1.7 (aborted) — `parallel=auto` worker-count scaling
+
+Negative result, not committed (code reverted). Added `parallel="auto"` default
+and two worker-count variants in `getMaxNumWorkers()`, then ran the full
+240-set (60s, 12 threads) vs 1.15.1.6:
+
+- shifted-geomean(10) **5.283s → 8.921s, ratio 1.69** — regression
+- 98 shared, **96 slower / 2 faster**
+
+Key lesson for any future parallel work: **worker count must NOT be gated on
+matrix size.** `getMaxNumWorkers()` is a fixed ceiling (`ceil(1.7*threads)`=21);
+the *actual* spawn is demand-driven by live open-node count
+(`HighsMipSolver.cpp:1000-1016`), not matrix nonzeros. MIPLIB instances are
+tree-search-bound — a 2016-nz `neos5` still needs all 21 workers (solves ~12s
+with `on`, times out with ~3). The 1.7× over-subscription is load-balancing
+headroom across node-queue stalls, not wasted contention. Do not reduce it.
+
+Corollary for the parallel-redesign re-port: its value is **fewer/batched
+syncs** (staleness trade), not worker count — batch size is an unmeasured
+U-curve (`sync=c1/batch`, `staleness=c2*batch`); sweep {1,10,50,100,500} on the
+large subset. Nodes are evaluation-gated (not generated blindly). Judge the
+redesign on the **large-instance subset** (≥120k nz), where sync cost
+dominates; a blended all-instance geomean hides its signal.
+
 **Note on comparison method**: `compare_versions.py` now defaults to
 `solved-only` — timeouts are excluded from the shared set and geomean (their
 true solve time is unknown; 60s is a lower bound, not an estimate). Use
