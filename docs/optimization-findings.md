@@ -133,6 +133,22 @@ large subset. Nodes are evaluation-gated (not generated blindly). Judge the
 redesign on the **large-instance subset** (≥120k nz), where sync cost
 dominates; a blended all-instance geomean hides its signal.
 
+### 1.15.1.8 (aborted) — parallel-redesign re-port (GMI + node presolve intact)
+
+Re-ported `parallel-redesign` onto master (1.15.1.6) keeping `generateGomoryCut`
++ node presolve; merged only the 12 `highs/mip/` files. Full 240-set (60s,
+12 threads) vs 1.15.1.6:
+
+- shifted-geomean(10, timeouts folded) **27.965s → 35.003s, ratio 1.25**
+- 240 shared, **23 faster / 217 slower**
+- **time-limit enforcement broken**: instances ran 30-44× over the 60s cap
+  (s100 199→2637s, nw04 60→1907s, co-100 62→384s); co-100 crashes in probing.
+
+**Verdict**: the batching's sync savings are outweighed by staleness + broken
+time-limit checks on this 12-thread/60s workload. The earlier optimistic
+"judge on large subset" hypothesis was WRONG — even node-heavy instances
+regressed. Rejected. See branch `failed/parallel-redesign/1.15.1.8`.
+
 **Note on comparison method**: `compare_versions.py` now defaults to
 `solved-only` — timeouts are excluded from the shared set and geomean (their
 true solve time is unknown; 60s is a lower bound, not an estimate). Use

@@ -64,6 +64,30 @@ all-workers heuristics, deterministic early termination). Built clean, ctest
 than 1.15.1.3 on the MIPLIB2017 fast subset both times. Work preserved on
 branch `parallel-redesign2` (commit `51c8819cc9`). Master stays on 1.15.1.3.
 
+### 1.15.1.8 (aborted) — parallel-redesign port on GMI + node presolve
+
+Re-ported the upstream `parallel-redesign` MIP core onto current master
+(1.15.1.6), keeping the idiomatic GMI (`generateGomoryCut`) and node LP
+presolve intact (merged only the 12 `highs/mip/` redesign files; GMI +
+`mip_node_presolve_threshold` verified present post-merge). Batch-based search:
+per-worker `preparedNodes`/`processedNodes` stash, `maxNodesPerWorkerLim=100`
+batch commit, deterministic early termination. Built clean; ctest failures were
+identical to baseline (pre-existing CHUZC iteration-count drift, not port
+regressions). **Aborted — rejected.**
+
+**Full-set benchmark (240 MIPLIB2017, 60s, 12 threads)** vs 1.15.1.6:
+- shifted-geomean(10, timeouts folded) **27.965s → 35.003s, ratio 1.25**
+- 240 shared, **23 faster / 217 slower**
+- **Time-limit enforcement broken**: instances ran 30-44× over the 60s cap
+  (s100 199→2637s, nw04 60→1907s, nursesched-medium 61→2191s, co-100
+  62→384s); co-100 crashes in probing (exit 255).
+
+**Verdict**: the redesign's batching saves sync cost but pays a massive
+staleness cost + breaks time-limit checks inside the batch loop. On this
+12-thread/60s workload it is a net regression. Rejected; work preserved on
+branch `failed/parallel-redesign/1.15.1.8` (commit `fa1a771067`). Master
+stays on 1.15.1.6.
+
 ### 1.15.1.7 (aborted) — `parallel=auto` worker-count scaling
 
 Attempted to make parallelism adaptive. Added `kHighsAutoString="auto"` to
@@ -229,3 +253,4 @@ Check `git branch -r` before starting any Tier 2 item.
 - **worker-count ≠ performance (1.15.1.7)**: MIPLIB2017 is tree-search-bound, not size-bound. `getMaxNumWorkers()` ceiling is fixed at `ceil(1.7*threads)` regardless of matrix size; only the *actual* spawn is demand-driven by live open-node count (`HighsMipSolver.cpp:1000`). Both a size-scaled ceiling and a `num_threads` cap regressed the full 240-set (ratio 1.69). Keep `on` (1.7× over-subscription) — it is load-balancing headroom, not wasted contention. Do NOT gate worker count on matrix nonzeros.
 - **sync less ≠ free**: batching cut/domain sync (parallel-redesign) trades sync cost for staleness (subtree redundancy + discarded buffered `processedNodes` on early termination). Batch size is a U-curve (`cost = c1/batch + c2*batch`), optimum unknown — sweep {1,10,50,100,500} on the large subset before trusting 100. Nodes are NOT generated blindly: children only branch after evaluation gates them (suboptimal→stash, pruned→backtrack).
 - **parallel-redesign**: upstream's per-worker nodequeue → processedNodes batch stash, `maxNodesPerWorkerLim=100` ramp-up, and 1:1 thread mapping were **measured slower** than the vanilla 1.15.1.3 parallel path (2 benchmark runs). Benchmark any parallel-MIP change on a quiet machine with a real 1.15.1.3 baseline before adopting — do not cherry-pick upstream parallel redesign blindly.
+- **parallel-redesign breaks time limits (1.15.1.8)**: the batch loop commits work in `maxNodesPerWorkerLim` chunks and only checks the clock at batch boundaries, so on long node batches the solver ignores `time_limit` for 30-44× the cap. ANY batched-parallel port MUST check time limit inside the per-node loop, not just at batch commit. Always A/B the port against the real baseline binary (`benchmark/binaries/highs-1.15.1.6`) — the 1.15.1.4 rejection was against a GMI-less 1.15.1.3 and was invalid; the 1.15.1.8 re-port (GMI+node presolve intact) is a genuine 1.25× regression.
