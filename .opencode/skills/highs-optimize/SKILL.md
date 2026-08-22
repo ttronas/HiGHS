@@ -41,10 +41,16 @@ official `HIGHS_PATCH` is NOT changed.
 one version bump = one changelog entry. Update the "Current Status" table in
 `docs/optimization-changelog.md` after each commit.
 
+## Branching workflow (mandatory)
+
+- **Always develop in a separate `feature/<feature-name>/<version>` branch first.** Branch from `master`, bump `HIGHS_TWEAK` there, build/benchmark on that branch.
+- Do NOT commit feature work directly to `master`.
+
 ## Workflow
 
 ```
-0. Bump HIGHS_TWEAK in Version.txt (before building — harness reads version at runtime)
+0. Create feature branch: git checkout -b feature/<feature-name>/<version> master
+   Bump HIGHS_TWEAK in Version.txt (before building — harness reads version at runtime)
 1. Build:           ./benchmark/scripts/build_highs.sh
 2. Smoke (7 MIPs):  cd benchmark && uv run python scripts/run_benchmark.py --instances-root examples
 3. Iteration bench: cd benchmark && uv run python scripts/run_benchmark.py \
@@ -53,23 +59,16 @@ one version bump = one changelog entry. Update the "Current Status" table in
 5. Compare:         cd benchmark && uv run python scripts/compare_versions.py \
                         --versions <base> <cur> --set iterN
 6. Unit tests:      cd build && ctest
-7. Update changelog + findings, then commit
+7. Update changelog + findings, then commit (see Commit policy)
 ```
 
 ## Commit policy (success vs failure)
 
 Do NOT stash or delete tested feature files — keep them for future analysis.
 
-- **Not successful / performance decrease**: commit the *feature code* to a
-  separate branch `failed/<feature-name>/<version>` (note: git disallows `:`
-  in branch names, use `/` instead). Do NOT merge. Add the learning + status to
-  `docs/optimization-findings.md` and `docs/optimization-changelog.md` on the
-  **master** branch, then commit those doc changes to master.
-- **Successful**: bump the version (per Version convention) and commit the new
-  version to the **master** branch; also update `docs/optimization-changelog.md`
-  and `docs/optimization-findings.md`.
-- Never stash or revert tested feature work — it is analysis fodder. Always land
-  it on a branch and document it.
+- **Successful / improvement or no regression**: merge the `feature/<feature-name>/<version>` branch to `master` (or fast-forward), then update `docs/optimization-changelog.md` and `docs/optimization-findings.md` on `master` and commit.
+- **Not successful / performance decrease**: **rename** the feature branch to `failed/<feature-name>/<version>` (`git branch -m feature/... failed/...`). Do NOT merge to `master`. Add the learning + status to `docs/optimization-findings.md` and `docs/optimization-changelog.md` on the **master** branch, then commit those doc changes to `master`.
+- Never stash or revert tested feature work — it is analysis fodder. Always land it on a branch and document it. The `feature/` → `failed/` rename preserves the full development history for debugging.
 
 Single-instance debug: `--instance <NAME>`. Re-run cached: `--force`. Full
 240-run: only on explicit request.
