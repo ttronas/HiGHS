@@ -39,6 +39,50 @@ from typing import Any
 
 RESULTS_ROOT = Path(__file__).resolve().parents[1] / "results"
 
+GROUND_TRUTH_ABS_TOL = 1e-5
+GROUND_TRUTH_REL_TOL = 1e-6
+
+
+def _discover_gurobi_version(results_root: Path) -> str | None:
+    g_dir = results_root / "gurobi"
+    if not g_dir.is_dir():
+        return None
+    vers = sorted(p.name for p in g_dir.iterdir() if p.is_dir())
+    return vers[-1] if vers else None
+
+
+def _ground_truth_mismatches(
+    hi: dict[str, dict[str, Any]],
+    gt: dict[str, dict[str, Any]],
+) -> list[str]:
+    out: list[str] = []
+    for inst, hrec in hi.items():
+        grec = gt.get(inst)
+        if grec is None:
+            continue
+        g_stat = (grec.get("status") or "").lower()
+        h_stat = (hrec.get("status") or "").lower()
+        if g_stat not in ("optimal", "infeasible", "unbounded"):
+            continue
+        h_solved = "limit" not in h_stat and "unsolved" not in h_stat and h_stat not in ("error", "")
+        if not h_solved:
+            continue
+        if g_stat != h_stat:
+            out.append(f"{inst}: HiGHS {h_stat} != Gurobi {g_stat} (gurobi obj={grec.get('objective')})")
+            continue
+        if g_stat == "optimal":
+            go = grec.get("objective")
+            ho = hrec.get("objective")
+            if go is not None and ho is not None:
+                try:
+                    diff = abs(float(go) - float(ho))
+                except (TypeError, ValueError):
+                    continue
+                tol = GROUND_TRUTH_ABS_TOL + GROUND_TRUTH_REL_TOL * max(abs(float(go)), abs(float(ho)), 1e-9)
+                if diff > tol:
+                    out.append(f"{inst}: objective mismatch HiGHS {ho:.9g} != Gurobi {go:.9g} diff={diff:.3g}")
+    return out
+
 
 def shifted_geomean(values: list[float], shift: float = 10.0) -> float:
     if not values:
@@ -148,6 +192,30 @@ def main() -> int:
     specs = [split_spec(v) for v in versions]
     data = {v: load_version(version, args.set, args.results_root, solver)
             for v, (solver, version) in zip(versions, specs)}
+
+    gt_version = _discover_gurobi_version(args.results_root)
+    gt_data: dict[str, dict[str, Any]] = {}
+    if gt_version is not None:
+        gt_data = load_version(gt_version, args.set, args.results_root, "gurobi")
+        if gt_data:
+            print(f"ground truth: gurobi {gt_version} ({len(gt_data)} records, set={args.set})")
+            for ver, (solver, _) in zip(versions, specs):
+                if solver != "highs":
+                    continue
+                mism = _ground_truth_mismatches(data.get(ver, {}), gt_data)
+                if mism:
+                    print(f"\n!! ground truth mismatches for {ver} vs gurobi {gt_version} ({len(mism)} instances):")
+                    for m in mism:
+                        print(f"  !! {m}")
+                    print(f"  -> {len(mism)} mismatches: HiGHS verdict/objective disagrees with Gurobi")
+                else:
+                    hi_solved = sum(1 for r in data.get(ver, {}).values() if is_solved(r))
+                    gt_solved = sum(1 for k, r in gt_data.items() if k in data.get(ver, {}) and (r.get("status") or "").lower() in ("optimal", "infeasible", "unbounded"))
+                    print(f"  ground truth OK for {ver}: no status/objective mismatches on {gt_solved} Gurobi-solved shared instances ({hi_solved} HiGHS solved)")
+        else:
+            print(f"ground truth: gurobi {gt_version} has no records for set={args.set} — skipping check")
+    else:
+        print("ground truth: no gurobi results found — skipping check (run gurobi benchmark first)")
 
     if args.mode == "neighbor":
         pairs = [(versions[i - 1], versions[i]) for i in range(1, len(versions))]
