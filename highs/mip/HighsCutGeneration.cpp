@@ -1183,6 +1183,24 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
 
   if (violation <= 10 * feastol) return false;
 
+  {
+    HighsCDouble maxAct = 0;
+    bool hasInf = false;
+    const HighsDomain& gd = transLp.getGlobaldom();
+    for (HighsInt i = 0; i != rowlen; ++i) {
+      HighsInt col = inds[i];
+      double c = vals[i];
+      if (c > 0) {
+        if (gd.col_upper_[col] == kHighsInf) { hasInf = true; break; }
+        maxAct += gd.col_upper_[col] * c;
+      } else if (c < 0) {
+        if (gd.col_lower_[col] == -kHighsInf) { hasInf = true; break; }
+        maxAct += gd.col_lower_[col] * c;
+      }
+    }
+    if (!hasInf && maxAct < rhs - feastol) return false;
+  }
+
   transLp.getGlobaldom().tightenCoefficients(inds, vals, rowlen, rhs_);
 
   // if the cut is violated by a small factor above the feasibility
@@ -1215,6 +1233,12 @@ bool HighsCutGeneration::generateGomoryCut(HighsTransformedLp& transLp,
   bool hasContinuous = false;
   if (!preprocessBaseInequality(hasUnboundedInts, hasGeneralInts, hasContinuous))
     return false;
+
+  // Restrict pure GMI to pure binary rows; general integers / continuous
+  // and unbounded ints need lifted covers or more careful MIR scaling.
+  // The generic generateCut path already handles those cases soundly via
+  // tryGenerateCut; the fast GMI path is only safe for pure binary.
+  if (hasUnboundedInts || hasGeneralInts || hasContinuous) return false;
 
   // pure Gomory mixed-integer cut: the mixed-integer rounding of the fractional
   // row at its initial scale (delta = 1). Skip cover/lifting and the
@@ -1380,6 +1404,23 @@ bool HighsCutGeneration::finalizeAndAddCut(const HighsDomain& globaldom,
   for (HighsInt i = 0; i != rowlen; ++i) violation += sol[inds[i]] * vals_[i];
 
   if (violation <= 10 * feastol) return false;
+
+  {
+    HighsCDouble maxAct = 0;
+    bool hasInf = false;
+    for (HighsInt i = 0; i != rowlen; ++i) {
+      HighsInt col = inds[i];
+      double c = vals[i];
+      if (c > 0) {
+        if (globaldom.col_upper_[col] == kHighsInf) { hasInf = true; break; }
+        maxAct += globaldom.col_upper_[col] * c;
+      } else if (c < 0) {
+        if (globaldom.col_lower_[col] == -kHighsInf) { hasInf = true; break; }
+        maxAct += globaldom.col_lower_[col] * c;
+      }
+    }
+    if (!hasInf && maxAct < rhs - feastol) return false;
+  }
 
   globaldom.tightenCoefficients(inds, vals, rowlen, rhs_);
 

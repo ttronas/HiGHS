@@ -17,6 +17,9 @@ TEST_CASE("HighsVersion", "[highs_version]") {
   const std::string githash = std::string(highsGithash());
   std::stringstream ss;
   ss << major << "." << minor << "." << patch;
+#ifdef HIGHS_VERSION_TWEAK
+  if (HIGHS_VERSION_TWEAK != 0) ss << "." << HIGHS_VERSION_TWEAK;
+#endif
   std::string local_version = ss.str();
   if (dev_run) {
     printf("HiGHS version: %s\n", version.c_str());
