@@ -144,10 +144,17 @@ Re-ported `parallel-redesign` onto master (1.15.1.6) keeping `generateGomoryCut`
 - **time-limit enforcement broken**: instances ran 30-44× over the 60s cap
   (s100 199→2637s, nw04 60→1907s, co-100 62→384s); co-100 crashes in probing.
 
+Follow-up: reduced `maxNodesPerWorkerLim` 100→10→5 and added per-batch/per-node
+global time checks (`mipdata->checkLimits()` / `timer_.read()`). co-100
+384s→150s→140s vs baseline 62s; s100 still >120s wall for 60s limit. **Still
+2.3× slower than baseline, no speedup on broken instances** (tested s100, nw04,
+ns1760995, nursesched-medium, co-100). Second fix attempted, still rejected.
+
 **Verdict**: the batching's sync savings are outweighed by staleness + broken
 time-limit checks on this 12-thread/60s workload. The earlier optimistic
 "judge on large subset" hypothesis was WRONG — even node-heavy instances
-regressed. Rejected. See branch `failed/parallel-redesign/1.15.1.8`.
+regressed. Rejected. See branch `failed/parallel-redesign/1.15.1.8` (commits
+`fa1a771067`, `568611fc05`).
 
 **Note on comparison method**: `compare_versions.py` now defaults to
 `solved-only` — timeouts are excluded from the shared set and geomean (their

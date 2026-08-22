@@ -82,10 +82,20 @@ regressions). **Aborted — rejected.**
   (s100 199→2637s, nw04 60→1907s, nursesched-medium 61→2191s, co-100
   62→384s); co-100 crashes in probing (exit 255).
 
+Follow-up fixes on branch `failed/parallel-redesign/1.15.1.8`:
+- `maxNodesPerWorkerLim` 100→10→5, ramp 20→5, plus global time checks at main
+  loop top and inside worker batch loop (`mipdata->checkLimits()` /
+  `timer_.read()`). co-100 wall: 384s→150s (10)→140s (5) vs baseline 62s;
+  s100 still times out >120s wall for 60s limit (was 2637s). **Still 2.3×
+  slower than baseline, no speedup on broken instances** (tested s100, nw04,
+  co-100, ns1760995, nursesched-medium via harness). Second fix attempted, still
+  rejected.
+
 **Verdict**: the redesign's batching saves sync cost but pays a massive
-staleness cost + breaks time-limit checks inside the batch loop. On this
-12-thread/60s workload it is a net regression. Rejected; work preserved on
-branch `failed/parallel-redesign/1.15.1.8` (commit `fa1a771067`). Master
+staleness cost + breaks time-limit checks inside the batch loop. Even with
+max 5 and per-node time checks, it remains slower than vanilla on this
+12-thread/60s workload. Rejected; work preserved on branch
+`failed/parallel-redesign/1.15.1.8` (commits `fa1a771067`, `568611fc05`). Master
 stays on 1.15.1.6.
 
 ### 1.15.1.7 (aborted) — `parallel=auto` worker-count scaling
