@@ -106,7 +106,7 @@ class HighsCutGeneration {
   /// idiomatic equivalent of a lean raw-GMI fast path.
   bool generateGomoryCut(HighsTransformedLp& transLp,
                          std::vector<HighsInt>& inds, std::vector<double>& vals,
-                         double& rhs);
+                         double& rhs, bool isLocal = false);
 
   /// generate a conflict from the given proof constraint which cuts of the
   /// given local domain
@@ -119,7 +119,7 @@ class HighsCutGeneration {
   /// cutpool if it is violated enough
   bool finalizeAndAddCut(const HighsDomain& globaldom,
                          std::vector<HighsInt>& inds, std::vector<double>& vals,
-                         double& rhs);
+                         double& rhs, bool isLocal = false);
 };
 
 #endif

@@ -1242,7 +1242,7 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
 bool HighsCutGeneration::generateGomoryCut(HighsTransformedLp& transLp,
                                            std::vector<HighsInt>& inds_,
                                            std::vector<double>& vals_,
-                                           double& rhs_) {
+                                           double& rhs_, bool isLocal) {
   bool intsPositive = true;
   bool useClean = transLp.isCleanRow(inds_);
   bool transformOk;
@@ -1293,7 +1293,7 @@ bool HighsCutGeneration::generateGomoryCut(HighsTransformedLp& transLp,
   inds_.resize(rowlen);
   if (!transLp.untransform(vals_, inds_, rhs_)) return false;
 
-  return finalizeAndAddCut(transLp.getGlobaldom(), inds_, vals_, rhs_);
+  return finalizeAndAddCut(transLp.getGlobaldom(), inds_, vals_, rhs_, isLocal);
 }
 
 bool HighsCutGeneration::generateConflict(const HighsDomain& localdomain,
@@ -1393,7 +1393,7 @@ bool HighsCutGeneration::generateConflict(const HighsDomain& localdomain,
 bool HighsCutGeneration::finalizeAndAddCut(const HighsDomain& globaldom,
                                            std::vector<HighsInt>& inds_,
                                            std::vector<double>& vals_,
-                                           double& rhs_) {
+                                           double& rhs_, bool isLocal) {
   complementation.clear();
   rowlen = inds_.size();
   inds = inds_.data();
@@ -1473,10 +1473,11 @@ bool HighsCutGeneration::finalizeAndAddCut(const HighsDomain& globaldom,
   globaldom.tightenCoefficients(inds, vals, rowlen, rhs_);
 
   // if the cut is violated by a small factor above the feasibility
-  // tolerance, add it to the cutpool
-  HighsInt cutindex = cutpool.addCut(lpRelaxation.getMipSolver(), inds_.data(),
-                                     vals_.data(), inds_.size(), rhs_,
-                                     integralSupport && integralCoefficients);
+  // tolerance, add it to the cutpool; for local cuts do not propagate
+  bool propagate = !isLocal;
+  HighsInt cutindex = cutpool.addCut(
+      lpRelaxation.getMipSolver(), inds_.data(), vals_.data(), inds_.size(),
+      rhs_, integralSupport && integralCoefficients, propagate);
 
   // only return true if cut was accepted by the cutpool, i.e. not a duplicate
   // of a cut already in the pool
