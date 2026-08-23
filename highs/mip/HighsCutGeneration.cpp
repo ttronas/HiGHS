@@ -1187,8 +1187,10 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
     HighsCDouble maxAct = 0;
     bool hasInf = false;
     const HighsDomain& gd = transLp.getGlobaldom();
+    HighsInt ncol = static_cast<HighsInt>(gd.col_upper_.size());
     for (HighsInt i = 0; i != rowlen; ++i) {
       HighsInt col = inds[i];
+      if (col < 0 || col >= ncol) { hasInf = true; break; }
       double c = vals[i];
       if (c > 0) {
         if (gd.col_upper_[col] == kHighsInf) { hasInf = true; break; }
@@ -1212,58 +1214,6 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
   // only return true if cut was accepted by the cutpool, i.e. not a duplicate
   // of a cut already in the pool
   return cutindex != -1;
-}
-
-bool HighsCutGeneration::generateGomoryCut(HighsTransformedLp& transLp,
-                                           std::vector<HighsInt>& inds_,
-                                           std::vector<double>& vals_,
-                                           double& rhs_) {
-  bool intsPositive = true;
-  if (!transLp.transform(vals_, upper, solval, inds_, rhs_, intsPositive))
-    return false;
-
-  rowlen = inds_.size();
-  this->inds = inds_.data();
-  this->vals = vals_.data();
-  this->rhs = rhs_;
-  complementation.clear();
-
-  bool hasUnboundedInts = false;
-  bool hasGeneralInts = false;
-  bool hasContinuous = false;
-  if (!preprocessBaseInequality(hasUnboundedInts, hasGeneralInts, hasContinuous))
-    return false;
-
-  // Restrict pure GMI to pure binary rows; general integers / continuous
-  // and unbounded ints need lifted covers or more careful MIR scaling.
-  // The generic generateCut path already handles those cases soundly via
-  // tryGenerateCut; the fast GMI path is only safe for pure binary.
-  if (hasUnboundedInts || hasGeneralInts || hasContinuous) return false;
-
-  // pure Gomory mixed-integer cut: the mixed-integer rounding of the fractional
-  // row at its initial scale (delta = 1). Skip cover/lifting and the
-  // delta-search of cmirCutGenerationHeuristic by asking for the initial scale
-  // only.
-  if (!cmirCutGenerationHeuristic(10 * feastol, true)) return false;
-
-  removeComplementation();
-
-  // remove zeros in place
-  for (HighsInt i = rowlen - 1; i >= 0; --i) {
-    if (vals[i] == 0.0) {
-      --rowlen;
-      inds[i] = inds[rowlen];
-      vals[i] = vals[rowlen];
-    }
-  }
-
-  rhs_ = (double)rhs;
-  vals_.resize(rowlen);
-  inds_.resize(rowlen);
-  if (!transLp.untransform(vals_, inds_, rhs_)) return false;
-
-  // apply the shared cut postprocessing, violation and duplicate gating
-  return finalizeAndAddCut(transLp.getGlobaldom(), inds_, vals_, rhs_);
 }
 
 bool HighsCutGeneration::generateConflict(const HighsDomain& localdomain,
@@ -1408,8 +1358,10 @@ bool HighsCutGeneration::finalizeAndAddCut(const HighsDomain& globaldom,
   {
     HighsCDouble maxAct = 0;
     bool hasInf = false;
+    HighsInt ncol = static_cast<HighsInt>(globaldom.col_upper_.size());
     for (HighsInt i = 0; i != rowlen; ++i) {
       HighsInt col = inds[i];
+      if (col < 0 || col >= ncol) { hasInf = true; break; }
       double c = vals[i];
       if (c > 0) {
         if (globaldom.col_upper_[col] == kHighsInf) { hasInf = true; break; }
