@@ -446,6 +446,142 @@ bool HighsTransformedLp::transform(std::vector<double>& vals,
   return true;
 }
 
+bool HighsTransformedLp::isCleanRow(const std::vector<HighsInt>& inds) const {
+  if (!vectorsum.getNonzeros().empty()) return false;
+  for (HighsInt col : inds) {
+    if (col < 0) return false;
+    if (col >= static_cast<HighsInt>(globaldom_.col_upper_.size())) return false;
+    if (bestVlb[col].first != -1 || bestVub[col].first != -1) return false;
+    double lb = globaldom_.col_lower_[col];
+    double ub = globaldom_.col_upper_[col];
+    if (lb == -kHighsInf && ub == kHighsInf) return false;
+    if (ub - lb < 1e-9) return false;
+  }
+  return true;
+}
+
+bool HighsTransformedLp::transformClean(
+    std::vector<double>& vals, std::vector<double>& upper,
+    std::vector<double>& solval, std::vector<HighsInt>& inds, double& rhs,
+    bool& integersPositive) {
+  assert(vectorsum.getNonzeros().empty());
+  assert(isCleanRow(inds));
+  HighsCDouble tmpRhs = rhs;
+  const HighsMipSolver& mip = lprelaxation.getMipSolver();
+  const HighsInt slackOffset = lprelaxation.numCols();
+  auto getLb = [&](HighsInt col) {
+    return (col < slackOffset ? globaldom_.col_lower_[col]
+                              : lprelaxation.slackLower(col - slackOffset,
+                                                        globaldom_));
+  };
+  auto getUb = [&](HighsInt col) {
+    return (col < slackOffset ? globaldom_.col_upper_[col]
+                              : lprelaxation.slackUpper(col - slackOffset,
+                                                        globaldom_));
+  };
+  auto remove = [&](HighsInt position) {
+    HighsInt numNz = inds.size();
+    // actually numNz is captured via reference to outer, use inds.size()
+    // we maintain numNz separately
+  };
+  HighsInt numNz = inds.size();
+  // custom remove that updates numNz
+  auto removePos = [&](HighsInt pos) {
+    numNz--;
+    inds[pos] = inds[numNz];
+    vals[pos] = vals[numNz];
+    inds[numNz] = 0;
+    vals[numNz] = 0;
+  };
+  HighsInt i = 0;
+  while (i < numNz) {
+    HighsInt col = inds[i];
+    double lb = getLb(col);
+    double ub = getUb(col);
+    if (ub - lb < mip.options_mip_->small_matrix_value) {
+      tmpRhs -= std::min(lb, ub) * vals[i];
+      removePos(i);
+      continue;
+    }
+    if (lb == -kHighsInf && ub == kHighsInf) {
+      vectorsum.clear();
+      return false;
+    }
+    BoundType oldBoundType = boundTypes[col];
+    if (lprelaxation.isColIntegral(col)) {
+      if (simpleLbDist[col] < simpleUbDist[col] - mip.mipdata_->feastol) {
+        boundTypes[col] = BoundType::kSimpleLb;
+      } else if (simpleUbDist[col] < simpleLbDist[col] - mip.mipdata_->feastol) {
+        boundTypes[col] = BoundType::kSimpleUb;
+      } else if (vals[i] > 0) {
+        boundTypes[col] = BoundType::kSimpleLb;
+      } else {
+        boundTypes[col] = BoundType::kSimpleUb;
+      }
+    } else {
+      if (lbDist[col] < ubDist[col] - mip.mipdata_->feastol) {
+        boundTypes[col] = BoundType::kSimpleLb;
+      } else if (ubDist[col] < lbDist[col] - mip.mipdata_->feastol) {
+        boundTypes[col] = BoundType::kSimpleUb;
+      } else if (vals[i] > 0) {
+        boundTypes[col] = BoundType::kSimpleLb;
+      } else {
+        boundTypes[col] = BoundType::kSimpleUb;
+      }
+    }
+    switch (boundTypes[col]) {
+      case BoundType::kSimpleLb:
+        if (vals[i] > 0) {
+          tmpRhs -= lb * vals[i];
+          boundTypes[col] = oldBoundType;
+          removePos(i);
+          continue;
+        }
+        break;
+      case BoundType::kSimpleUb:
+        if (vals[i] < 0) {
+          tmpRhs -= ub * vals[i];
+          boundTypes[col] = oldBoundType;
+          removePos(i);
+          continue;
+        }
+        break;
+      default:
+        break;
+    }
+    ++i;
+  }
+  vals.resize(numNz);
+  inds.resize(numNz);
+  upper.resize(numNz);
+  solval.resize(numNz);
+  for (HighsInt j = 0; j < numNz; ++j) {
+    HighsInt col = inds[j];
+    double lb = getLb(col);
+    double ub = getUb(col);
+    upper[j] = ub - lb;
+    switch (boundTypes[col]) {
+      case BoundType::kSimpleLb:
+        tmpRhs -= lb * vals[j];
+        solval[j] = lbDist[col];
+        break;
+      case BoundType::kSimpleUb:
+        tmpRhs -= ub * vals[j];
+        vals[j] = -vals[j];
+        solval[j] = ubDist[col];
+        break;
+      default:
+        assert(false);
+        break;
+    }
+    if (lprelaxation.isColIntegral(col))
+      integersPositive = integersPositive && vals[j] > 0;
+  }
+  rhs = double(tmpRhs);
+  if (numNz == 0 && rhs >= -mip.mipdata_->feastol) return false;
+  return true;
+}
+
 bool HighsTransformedLp::untransform(std::vector<double>& vals,
                                      std::vector<HighsInt>& inds, double& rhs,
                                      bool integral) {
