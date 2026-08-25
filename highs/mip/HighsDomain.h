@@ -346,7 +346,6 @@ class HighsDomain {
   std::vector<HighsInt> branchPos_;
   HighsHashTable<HighsInt> redundantRows_;
   bool recordRedundantRows_ = false;
-  std::vector<HighsDomainChange> propagateBuffer_;
 
  public:
   std::vector<double> col_lower_;

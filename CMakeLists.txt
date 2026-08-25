@@ -23,19 +23,7 @@ include(vcpkg)
 include(set-version)
 set_version(VERSION ${CMAKE_CURRENT_SOURCE_DIR})
 
-include(set-version)
-set_version(VERSION ${CMAKE_CURRENT_SOURCE_DIR})
-
 project(HIGHS VERSION ${VERSION} LANGUAGES CXX C)
-
-# Extract TWEAK from version string (format: MAJOR.MINOR.PATCH.TWEAK)
-string(REPLACE "." ";" VERSION_COMPONENTS "${VERSION}")
-list(LENGTH VERSION_COMPONENTS VERSION_COMPONENTS_LEN)
-if(VERSION_COMPONENTS_LEN GREATER 3)
-  list(GET VERSION_COMPONENTS 3 HIGHS_VERSION_TWEAK)
-else()
-  set(HIGHS_VERSION_TWEAK 0)
-endif()
 
 set(PROJECT_NAMESPACE highs)
 message(STATUS "${PROJECT_NAME} version: ${PROJECT_VERSION}")

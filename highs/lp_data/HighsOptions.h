@@ -514,7 +514,6 @@ struct HighsOptionsStruct {
   bool mip_improving_solution_report_sparse;
   std::string mip_improving_solution_file;
   bool mip_root_presolve_only;
-  HighsInt mip_node_presolve_threshold;
   HighsInt mip_lifting_for_probing;
   bool mip_search_simulate_concurrency;
   bool mip_allow_cut_separation_at_nodes;
@@ -681,7 +680,6 @@ struct HighsOptionsStruct {
         mip_improving_solution_report_sparse(false),
         mip_improving_solution_file(""),
         mip_root_presolve_only(false),
-        mip_node_presolve_threshold(200000),
         mip_lifting_for_probing(-1),
         mip_search_simulate_concurrency(false),
         // clang-format off
@@ -761,7 +759,7 @@ class HighsOptions : public HighsOptionsStruct {
 
     record_string = new OptionRecordString(
         kParallelString, "Parallel: \"off\", \"choose\" or \"on\"", advanced,
-        &parallel, kHighsOnString);
+        &parallel, kHighsChooseString);
     records.push_back(record_string);
 
     record_int = new OptionRecordInt(
@@ -1158,14 +1156,6 @@ class HighsOptions : public HighsOptionsStruct {
     records.push_back(record_bool);
 
     record_int = new OptionRecordInt(
-        "mip_node_presolve_threshold",
-        "Node LP presolve: enable LP presolve for node solves whose relaxation "
-        "has at least this many nonzeros (0 disables node presolve). Presolve "
-        "re-solves the node from a reduced model, trading warm start for size.",
-        advanced, &mip_node_presolve_threshold, 0, 200000, kHighsIInf);
-    records.push_back(record_int);
-
-    record_int = new OptionRecordInt(
         "mip_lifting_for_probing", "Level of lifting for probing that is used",
         advanced, &mip_lifting_for_probing, -1, -1, kHighsIInf);
     records.push_back(record_int);
@@ -1232,7 +1222,7 @@ class HighsOptions : public HighsOptionsStruct {
 
     record_double = new OptionRecordDouble(
         "mip_heuristic_effort", "Effort spent for MIP heuristics", advanced,
-        &mip_heuristic_effort, 0.0, 0.1, 1.0);
+        &mip_heuristic_effort, 0.0, 0.05, 1.0);
     records.push_back(record_double);
 
     record_bool =

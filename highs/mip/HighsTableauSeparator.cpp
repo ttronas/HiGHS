@@ -232,16 +232,10 @@ void HighsTableauSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
     cutGen.generateCut(transLp, baseRowInds, baseRowVals, rhs);
     if (transLp.getGlobaldom().infeasible()) break;
 
-    rhs = 0;
-    cutGen.generateGomoryCut(transLp, baseRowInds, baseRowVals, rhs);
-
     lpAggregator.getCurrentAggregation(baseRowInds, baseRowVals, true);
     rhs = 0;
     cutGen.generateCut(transLp, baseRowInds, baseRowVals, rhs);
     if (transLp.getGlobaldom().infeasible()) break;
-
-    rhs = 0;
-    cutGen.generateGomoryCut(transLp, baseRowInds, baseRowVals, rhs);
 
     lpAggregator.clear();
     if (bestScore == -1.0 && cutpool.getNumCuts() != numCuts)

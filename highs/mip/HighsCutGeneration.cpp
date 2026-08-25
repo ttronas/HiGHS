@@ -1103,15 +1103,8 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
 #endif
 
   bool intsPositive = true;
-  bool useClean = transLp.isCleanRow(inds_);
-  bool transformOk;
-  if (useClean)
-    transformOk =
-        transLp.transformClean(vals_, upper, solval, inds_, rhs_, intsPositive);
-  else
-    transformOk =
-        transLp.transform(vals_, upper, solval, inds_, rhs_, intsPositive);
-  if (!transformOk) return false;
+  if (!transLp.transform(vals_, upper, solval, inds_, rhs_, intsPositive))
+    return false;
 
   rowlen = inds_.size();
   this->inds = inds_.data();
@@ -1122,7 +1115,7 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
   bool hasGeneralInts = false;
   bool hasContinuous = false;
   if (!preprocessBaseInequality(hasUnboundedInts, hasGeneralInts,
-                                 hasContinuous))
+                                hasContinuous))
     return false;
 
   // it can happen that there is an unbounded integer variable during the
@@ -1190,42 +1183,6 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
 
   if (violation <= 10 * feastol) return false;
 
-  {
-    const auto& mipdata = lpRelaxation.getMipSolver().mipdata_;
-    if (!mipdata->incumbent.empty()) {
-      HighsCDouble act = -rhs_;
-      for (HighsInt i = 0; i < rowlen; ++i) {
-        HighsInt col = inds[i];
-        if (col < 0 || col >= static_cast<HighsInt>(mipdata->incumbent.size()))
-          continue;
-        double iv = mipdata->incumbent[col];
-        if (iv == kHighsInf || iv == -kHighsInf) continue;
-        act += iv * vals[i];
-      }
-      if (act > feastol) return false;
-    }
-  }
-
-  {
-    HighsCDouble maxAct = 0;
-    bool hasInf = false;
-    const HighsDomain& gd = transLp.getGlobaldom();
-    HighsInt ncol = static_cast<HighsInt>(gd.col_upper_.size());
-    for (HighsInt i = 0; i != rowlen; ++i) {
-      HighsInt col = inds[i];
-      if (col < 0 || col >= ncol) { hasInf = true; break; }
-      double c = vals[i];
-      if (c > 0) {
-        if (gd.col_upper_[col] == kHighsInf) { hasInf = true; break; }
-        maxAct += gd.col_upper_[col] * c;
-      } else if (c < 0) {
-        if (gd.col_lower_[col] == -kHighsInf) { hasInf = true; break; }
-        maxAct += gd.col_lower_[col] * c;
-      }
-    }
-    if (!hasInf && maxAct < rhs - feastol) return false;
-  }
-
   transLp.getGlobaldom().tightenCoefficients(inds, vals, rowlen, rhs_);
 
   // if the cut is violated by a small factor above the feasibility
@@ -1237,63 +1194,6 @@ bool HighsCutGeneration::generateCut(HighsTransformedLp& transLp,
   // only return true if cut was accepted by the cutpool, i.e. not a duplicate
   // of a cut already in the pool
   return cutindex != -1;
-}
-
-bool HighsCutGeneration::generateGomoryCut(HighsTransformedLp& transLp,
-                                           std::vector<HighsInt>& inds_,
-                                           std::vector<double>& vals_,
-                                           double& rhs_, bool isLocal) {
-  bool intsPositive = true;
-  bool useClean = transLp.isCleanRow(inds_);
-  bool transformOk;
-  if (useClean)
-    transformOk =
-        transLp.transformClean(vals_, upper, solval, inds_, rhs_, intsPositive);
-  else
-    transformOk =
-        transLp.transform(vals_, upper, solval, inds_, rhs_, intsPositive);
-  if (!transformOk) return false;
-
-  rowlen = inds_.size();
-  this->inds = inds_.data();
-  this->vals = vals_.data();
-  this->rhs = rhs_;
-  complementation.clear();
-
-  bool hasUnboundedInts = false;
-  bool hasGeneralInts = false;
-  bool hasContinuous = false;
-  if (!preprocessBaseInequality(hasUnboundedInts, hasGeneralInts, hasContinuous))
-    return false;
-
-  // Gated GMI: only pure binary, short, moderate f0 — generic generateCut
-  // already handles general ints/continuous via lifting.
-  if (hasUnboundedInts || hasGeneralInts || hasContinuous) return false;
-  if (rowlen > 50) return false;
-  {
-    double scalrhs = double(rhs) * initialScale;
-    double f0 = scalrhs - std::floor(scalrhs);
-    if (f0 < 0.10 || f0 > 0.90) return false;
-  }
-
-  if (!cmirCutGenerationHeuristic(10 * feastol, true)) return false;
-
-  removeComplementation();
-
-  for (HighsInt i = rowlen - 1; i >= 0; --i) {
-    if (vals[i] == 0.0) {
-      --rowlen;
-      inds[i] = inds[rowlen];
-      vals[i] = vals[rowlen];
-    }
-  }
-
-  rhs_ = double(rhs);
-  vals_.resize(rowlen);
-  inds_.resize(rowlen);
-  if (!transLp.untransform(vals_, inds_, rhs_)) return false;
-
-  return finalizeAndAddCut(transLp.getGlobaldom(), inds_, vals_, rhs_, isLocal);
 }
 
 bool HighsCutGeneration::generateConflict(const HighsDomain& localdomain,
@@ -1393,7 +1293,7 @@ bool HighsCutGeneration::generateConflict(const HighsDomain& localdomain,
 bool HighsCutGeneration::finalizeAndAddCut(const HighsDomain& globaldom,
                                            std::vector<HighsInt>& inds_,
                                            std::vector<double>& vals_,
-                                           double& rhs_, bool isLocal) {
+                                           double& rhs_) {
   complementation.clear();
   rowlen = inds_.size();
   inds = inds_.data();
@@ -1435,49 +1335,13 @@ bool HighsCutGeneration::finalizeAndAddCut(const HighsDomain& globaldom,
 
   if (violation <= 10 * feastol) return false;
 
-  {
-    const auto& mipdata = lpRelaxation.getMipSolver().mipdata_;
-    if (!mipdata->incumbent.empty()) {
-      HighsCDouble act = -rhs_;
-      for (HighsInt i = 0; i < rowlen; ++i) {
-        HighsInt col = inds[i];
-        if (col < 0 || col >= static_cast<HighsInt>(mipdata->incumbent.size()))
-          continue;
-        double iv = mipdata->incumbent[col];
-        if (iv == kHighsInf || iv == -kHighsInf) continue;
-        act += iv * vals[i];
-      }
-      if (act > feastol) return false;
-    }
-  }
-
-  {
-    HighsCDouble maxAct = 0;
-    bool hasInf = false;
-    HighsInt ncol = static_cast<HighsInt>(globaldom.col_upper_.size());
-    for (HighsInt i = 0; i != rowlen; ++i) {
-      HighsInt col = inds[i];
-      if (col < 0 || col >= ncol) { hasInf = true; break; }
-      double c = vals[i];
-      if (c > 0) {
-        if (globaldom.col_upper_[col] == kHighsInf) { hasInf = true; break; }
-        maxAct += globaldom.col_upper_[col] * c;
-      } else if (c < 0) {
-        if (globaldom.col_lower_[col] == -kHighsInf) { hasInf = true; break; }
-        maxAct += globaldom.col_lower_[col] * c;
-      }
-    }
-    if (!hasInf && maxAct < rhs - feastol) return false;
-  }
-
   globaldom.tightenCoefficients(inds, vals, rowlen, rhs_);
 
   // if the cut is violated by a small factor above the feasibility
-  // tolerance, add it to the cutpool; for local cuts do not propagate
-  bool propagate = !isLocal;
-  HighsInt cutindex = cutpool.addCut(
-      lpRelaxation.getMipSolver(), inds_.data(), vals_.data(), inds_.size(),
-      rhs_, integralSupport && integralCoefficients, propagate);
+  // tolerance, add it to the cutpool
+  HighsInt cutindex = cutpool.addCut(lpRelaxation.getMipSolver(), inds_.data(),
+                                     vals_.data(), inds_.size(), rhs_,
+                                     integralSupport && integralCoefficients);
 
   // only return true if cut was accepted by the cutpool, i.e. not a duplicate
   // of a cut already in the pool

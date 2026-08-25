@@ -99,15 +99,6 @@ class HighsCutGeneration {
                    std::vector<double>& vals, double& rhs,
                    bool onlyInitialCMIRScale = false);
 
-  /// generate a pure Gomory mixed-integer cut (MIR at the initial scale,
-  /// delta=1) from the given single row relaxation. Reuses the transformed row
-  /// state and applies efficacy/duplicate gating via finalizeAndAddCut, but
-  /// skips the cover/lifting and delta-search of generateCut. This is the
-  /// idiomatic equivalent of a lean raw-GMI fast path.
-  bool generateGomoryCut(HighsTransformedLp& transLp,
-                         std::vector<HighsInt>& inds, std::vector<double>& vals,
-                         double& rhs, bool isLocal = false);
-
   /// generate a conflict from the given proof constraint which cuts of the
   /// given local domain
   bool generateConflict(const HighsDomain& localdom,
@@ -119,7 +110,7 @@ class HighsCutGeneration {
   /// cutpool if it is violated enough
   bool finalizeAndAddCut(const HighsDomain& globaldom,
                          std::vector<HighsInt>& inds, std::vector<double>& vals,
-                         double& rhs, bool isLocal = false);
+                         double& rhs);
 };
 
 #endif

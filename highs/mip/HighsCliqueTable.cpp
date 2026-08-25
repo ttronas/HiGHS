@@ -1717,6 +1717,7 @@ std::vector<std::vector<HighsCliqueTable::CliqueVar>>
 HighsCliqueTable::separateCliques(const std::vector<double>& sol,
                                   const HighsDomain& globaldom,
                                   double feastol) {
+  exit(0);
 #if 0
   BronKerboschData data(sol);
   data.feastol = feastol;

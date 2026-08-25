@@ -52,9 +52,7 @@ void HEkkDualRow::setup() {
   // it's in updatePivots(), but create_Freelist() is only called in
   // Phase 2. Hence freeList is not initialised when freeList.empty()
   // is used in deleteFreelist(), clear freeList now.
-  freeListVec.clear();
-  freeListMark.assign(numTot, 0);
-  freeListPos.assign(numTot, -1);
+  freeList.clear();
 }
 
 void HEkkDualRow::clear() {
@@ -162,7 +160,7 @@ HighsInt HEkkDualRow::chooseFinal() {
   bool use_heap_sort = false;
   // Use the quadratic cost sort for smaller values of workCount,
   // otherwise use the heap-based sort
-  use_quad_sort = workCount < 100;
+  use_quad_sort = true;  // workCount < 100;
   use_heap_sort = !use_quad_sort;
   assert(use_heap_sort || use_quad_sort);
   if (use_quad_sort) {
@@ -568,29 +566,25 @@ void HEkkDualRow::updateDual(double theta) {
 }
 
 void HEkkDualRow::createFreelist() {
-  freeListVec.clear();
-  const HighsInt numTot =
-      ekk_instance_.lp_.num_col_ + ekk_instance_.lp_.num_row_;
-  freeListMark.assign(numTot, 0);
-  freeListPos.assign(numTot, -1);
-  for (HighsInt i = 0; i < numTot; i++) {
+  freeList.clear();
+  for (HighsInt i = 0;
+       i < ekk_instance_.lp_.num_col_ + ekk_instance_.lp_.num_row_; i++) {
     if (ekk_instance_.basis_.nonbasicFlag_[i] &&
         highs_isInfinity(-ekk_instance_.info_.workLower_[i]) &&
-        highs_isInfinity(ekk_instance_.info_.workUpper_[i])) {
-      freeListMark[i] = 1;
-      freeListPos[i] = (HighsInt)freeListVec.size();
-      freeListVec.push_back(i);
-    }
+        highs_isInfinity(ekk_instance_.info_.workUpper_[i]))
+      freeList.insert(i);
   }
+  //  debugFreeListNumEntries(ekk_instance_, freeList);
 }
 
 void HEkkDualRow::createFreemove(HVector* row_ep) {
-  if (!freeListVec.empty()) {
+  // TODO: Check with Qi what this is doing and why it's expensive
+  if (!freeList.empty()) {
     double Ta = ekk_instance_.info_.update_count < 10   ? 1e-9
                 : ekk_instance_.info_.update_count < 20 ? 3e-8
                                                         : 1e-6;
     HighsInt move_out = workDelta < 0 ? -1 : 1;
-    for (const HighsInt& iVar : freeListVec) {
+    for (const HighsInt& iVar : freeList) {
       assert(iVar < ekk_instance_.lp_.num_col_ + ekk_instance_.lp_.num_row_);
       double alpha = ekk_instance_.lp_.a_matrix_.computeDot(*row_ep, iVar);
       if (fabs(alpha) > Ta) {
@@ -603,8 +597,8 @@ void HEkkDualRow::createFreemove(HVector* row_ep) {
   }
 }
 void HEkkDualRow::deleteFreemove() {
-  if (!freeListVec.empty()) {
-    for (const HighsInt& iVar : freeListVec) {
+  if (!freeList.empty()) {
+    for (const HighsInt& iVar : freeList) {
       assert(iVar < ekk_instance_.lp_.num_col_ + ekk_instance_.lp_.num_row_);
       ekk_instance_.basis_.nonbasicMove_[iVar] = 0;
     }
@@ -612,14 +606,8 @@ void HEkkDualRow::deleteFreemove() {
 }
 
 void HEkkDualRow::deleteFreelist(HighsInt iVar) {
-  if (freeListMark[iVar]) {
-    HighsInt pos = freeListPos[iVar];
-    HighsInt last = freeListVec.back();
-    freeListVec[pos] = last;
-    freeListPos[last] = pos;
-    freeListMark[iVar] = 0;
-    freeListPos[iVar] = -1;
-    freeListVec.pop_back();
+  if (!freeList.empty()) {
+    if (freeList.count(iVar)) freeList.erase(iVar);
   }
 }
 

@@ -155,8 +155,7 @@ bool loadOptions(const CLI::App& app, const HighsLogOptions& report_log_options,
                  const HighsCommandLineOptions& c, HighsOptions& options) {
   if (c.cmd_version || c.cmd_notice) {
     std::cout << "HiGHS version " << HIGHS_VERSION_MAJOR << "."
-              << HIGHS_VERSION_MINOR << "." << HIGHS_VERSION_PATCH
-              << "." << HIGHS_VERSION_TWEAK;
+              << HIGHS_VERSION_MINOR << "." << HIGHS_VERSION_PATCH;
     std::cout << " Githash " << HIGHS_GITHASH << ". ";
     std::cout << kHighsCopyrightStatement << std::endl;
     std::cout << HighsExternalApi::thirdPartyNoticeHeader() << std::endl;
