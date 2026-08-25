@@ -1,0 +1,22 @@
+{
+  "dual_bound": -6249.018589777775,
+  "gap": Infinity,
+  "gurobi_error": null,
+  "instance": "rail02.mps",
+  "instance_file": "sets/miplib2017-benchmark/rail02.mps.gz",
+  "instance_hash": "6b63d7eba78d4d189f82ffdd90fa709594ee8e8345f5154f7ff5e5f6d1cd511b",
+  "instance_set": "miplib2017",
+  "machine": "13th-gen-intel-r-core-tm-i7-1355u-12cpu-15-5g",
+  "mip_gap_tol": 0.0001,
+  "nodes": 1,
+  "objective": Infinity,
+  "options_hash": "4e9294bae8cb42af",
+  "returncode": 0,
+  "run_date": "2026-08-21T06:10:21+00:00",
+  "runtime_s": 60.10197710990906,
+  "solver": "gurobi",
+  "solver_version": "12.0.3",
+  "status": "time_limit",
+  "threads": 12,
+  "time_limit": 60.0
+}

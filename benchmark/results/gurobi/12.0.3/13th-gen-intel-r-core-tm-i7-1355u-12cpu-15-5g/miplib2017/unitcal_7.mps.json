@@ -1,0 +1,22 @@
+{
+  "dual_bound": 19633757.594780423,
+  "gap": 9.592474779647257e-05,
+  "gurobi_error": null,
+  "instance": "unitcal_7.mps",
+  "instance_file": "sets/miplib2017-benchmark/unitcal_7.mps.gz",
+  "instance_hash": "e9c83822eacf7b929134baf74c75be489304c545d390858666869e5755fec9a0",
+  "instance_set": "miplib2017",
+  "machine": "13th-gen-intel-r-core-tm-i7-1355u-12cpu-15-5g",
+  "mip_gap_tol": 0.0001,
+  "nodes": 1,
+  "objective": 19635641.138704475,
+  "options_hash": "4e9294bae8cb42af",
+  "returncode": 0,
+  "run_date": "2026-08-21T06:58:51+00:00",
+  "runtime_s": 28.153697967529297,
+  "solver": "gurobi",
+  "solver_version": "12.0.3",
+  "status": "optimal",
+  "threads": 12,
+  "time_limit": 60.0
+}

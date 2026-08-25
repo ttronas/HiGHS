@@ -1,0 +1,22 @@
+{
+  "dual_bound": 1.0,
+  "gap": Infinity,
+  "gurobi_error": null,
+  "instance": "gfd-schedulen180f7d50m30k18.mps",
+  "instance_file": "sets/miplib2017-benchmark/gfd-schedulen180f7d50m30k18.mps.gz",
+  "instance_hash": "4a98fe1d8e019315a31f4bebbc242e2e196987fbf637400bd80ac4e5f74f8c76",
+  "instance_set": "miplib2017",
+  "machine": "13th-gen-intel-r-core-tm-i7-1355u-12cpu-15-5g",
+  "mip_gap_tol": 0.0001,
+  "nodes": 1,
+  "objective": Infinity,
+  "options_hash": "4e9294bae8cb42af",
+  "returncode": 0,
+  "run_date": "2026-08-21T04:46:41+00:00",
+  "runtime_s": 60.655247926712036,
+  "solver": "gurobi",
+  "solver_version": "12.0.3",
+  "status": "time_limit",
+  "threads": 12,
+  "time_limit": 60.0
+}

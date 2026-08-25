@@ -13,101 +13,141 @@ Optimize HiGHS solver.
 
 ## Read these first (required)
 
-- `docs/optimization-findings.md` — full findings, priority tiers, benchmark
-  results, and idiomatic HiGHS coding conventions. **READ BEFORE changing code.**
-- `docs/optimization-changelog.md` — version history, current status, and
-  "Learnings" section (recurring pitfalls). Every optimization commit must add
-  an entry here.
+- `docs/optimization-findings.md` — optimization taxonomy (idea rows:
+  component, expected signal, validation), priority tiers. **READ BEFORE
+  changing code.**
+- `docs/optimization-changelog.md` — version history, current status,
+  Learnings. Every optimization commit adds an entry here.
+- `docs/optimization-roadmap.md` — planned features and promotion gates.
+  Pick work from here; record outcomes back into it.
 
-The optimization tiers are maintained in those two files, NOT inline in this
-skill. Do not restate or duplicate tier tables here.
+The tiers are maintained in those files, NOT inline in this skill.
 
 ## Goal
 
 Reduce MIP solution times on the MIPLIB2017 benchmark set. Every change must
-show improvement (or no regression) in benchmark results. Primary metric is
-shifted geomean runtime across instances. After each cycle, run
-`benchmark/scripts/compare_versions.py` for a per-instance report and check for
-regressions before proceeding.
+show improvement (or no regression) in benchmark results WITHOUT ever
+compromising correctness. Primary metric: shifted geomean runtime across
+instances (from `compare_versions.py`). Correctness vs ground truth is
+non-negotiable — see gate below.
 
 ## Version convention
 
 Every optimization commit bumps `HIGHS_TWEAK` in `Version.txt` by 1
-(format `MAJOR.MINOR.PATCH.TWEAK`); results land in per-version dirs. The
-official `HIGHS_PATCH` is NOT changed.
-
-**Before building**: increment `HIGHS_TWEAK`. Changelog version MUST match
-`Version.txt` at commit time. Never skip versions. Each optimization commit =
-one version bump = one changelog entry. Update the "Current Status" table in
-`docs/optimization-changelog.md` after each commit.
+(`MAJOR.MINOR.PATCH.TWEAK`, e.g. 1.15.1 -> 1.15.1.9); official `HIGHS_PATCH`
+never changes. Bump BEFORE building — the harness reads the version from the
+binary at runtime. One commit = one bump = one changelog entry. Never skip.
 
 ## Branching workflow (mandatory)
 
-- **Always develop in a separate `feature/<feature-name>/<version>` branch first.** Branch from `master`, bump `HIGHS_TWEAK` there, build/benchmark on that branch.
-- Do NOT commit feature work directly to `master`.
+- Develop ONLY in `feature/<feature-name>/<version>` branches off `master`.
+- Never commit feature work directly to `master`.
+- **Harness immutability**: a feature branch may change `highs/` (and tests)
+  only. Never modify `benchmark/scripts/`, compare logic, instance lists, or
+  tolerance constants on a feature branch — the agent must not move its own
+  goalposts. Harness changes land separately on `master` first.
+- Failed feature (regression or correctness fail): rename branch to
+  `failed/<feature>/<version>`, never delete or stash it — it is analysis
+  fodder. Document the learning in findings + changelog ON master.
+
+## Test-set ladder
+
+| set | definition | command |
+|-----|------------|---------|
+| smoke-test | bundled examples (7 tiny MIPs) | `--instances-root examples --set smoke-test` |
+| super-fast | baseline solves < 10 s | `--instances-file super-fast-instances.txt --time-limit 15` |
+| fast | baseline solves < 60 s | `--instances-file fast-instances.txt --time-limit 60` |
+| full | all instances @ 60 s cap | default instances root |
+
+Lists are machine-dependent: regenerate with
+`uv run python scripts/filter_sets.py` after machine/baseline changes.
+Iterate on super-fast, confirm on fast; run full ONLY as merge gate
+(anti-overfit: do not tune against full-set results).
+
+Solves faster than 5 s are automatically repeated 3x and averaged by the
+runner (`runs[]`, `runtime_mean_s`; `runtime_s` = mean). Force with
+`--repeats N`.
 
 ## Workflow
 
 ```
-0. Create feature branch: git checkout -b feature/<feature-name>/<version> master
-   Bump HIGHS_TWEAK in Version.txt (before building — harness reads version at runtime)
-1. Build:           ./benchmark/scripts/build_highs.sh
-2. Smoke (7 MIPs):  cd benchmark && uv run python scripts/run_benchmark.py --instances-root examples
-3. Iteration bench: cd benchmark && uv run python scripts/run_benchmark.py \
-                        --instances-file super-fast-instances.txt --time-limit 15
-4. Summarize:       cd benchmark && uv run python scripts/summarize.py
-5. Compare:         cd benchmark && uv run python scripts/compare_versions.py \
-                        --versions <base> <cur> --set iterN
-6. Unit tests:      cd build && ctest
-7. Update changelog + findings, then commit (see Commit policy)
+0. git checkout -b feature/<feature>/<next-version> master
+   Bump HIGHS_TWEAK in Version.txt
+1. Build:           ./benchmark/scripts/build_highs.sh        # ccache-accelerated
+2. Smoke:           cd benchmark && uv run python scripts/run_benchmark.py \
+                       --instances-root examples --set smoke-test
+3. Unit tests:      cd build && ctest   (and uv run pytest scripts/test_compare_metrics.py)
+4. Iteration bench: uv run python scripts/run_benchmark.py \
+                       --instances-file super-fast-instances.txt --time-limit 15
+5. Gate+compare:    uv run python scripts/compare_versions.py --set super-fast \
+                       --versions highs:<base> highs:<cur>
+6. Confirm:         same with --set fast (fast-instances.txt, 60 s)
+7. Update changelog + findings + roadmap, then commit per Commit policy
 ```
 
-## Commit policy (success vs failure)
+Cached builds live in `benchmark/binaries/highs-<version>` (`--highs-bin`).
+Re-bench an old build without rebuilding. Runner skips already-cached
+instances automatically; `--force` re-runs.
 
-Do NOT stash or delete tested feature files — keep them for future analysis.
+## Correctness gate (non-negotiable)
 
-- **Successful / improvement or no regression**: merge the `feature/<feature-name>/<version>` branch to `master` (or fast-forward), then update `docs/optimization-changelog.md` and `docs/optimization-findings.md` on `master` and commit.
-- **Not successful / performance decrease**: **rename** the feature branch to `failed/<feature-name>/<version>` (`git branch -m feature/... failed/...`). Do NOT merge to `master`. Add the learning + status to `docs/optimization-findings.md` and `docs/optimization-changelog.md` on the **master** branch, then commit those doc changes to `master`.
-- Never stash or revert tested feature work — it is analysis fodder. Always land it on a branch and document it. The `feature/` → `failed/` rename preserves the full development history for debugging.
+`compare_versions.py` checks every candidate against the committed Gurobi
+ground truth (`results/gurobi/`, license at `benchmark/gurobi.lic`). Rules:
 
-Single-instance debug: `--instance <NAME>`. Re-run cached: `--force`. Full
-240-run: only on explicit request.
+- Any status/objective mismatch beyond tolerance => those instances are
+  INVALID SIGNAL: excluded from all aggregates, run exits 1, version FAILS.
+- Objectives within the candidate's configured `mip_gap_tol` of ground truth
+  are acceptable (stopping at the gap is by design).
+- No ground-truth coverage for a set? The comparator unions GT sets by
+  instance name; if still uncovered it says so — treat uncovered results as
+  provisional, never claim success from them.
+- Exit codes: 0 ok | 1 mismatch | 2 missing data.
 
-## Comparison method (defaults)
+## Comparison CLI (modular)
 
-- `compare_versions.py` defaults to `--solved-only`: instances where either
-  solver times out are **excluded** from the shared set and geomean. A 60s
-  timeout is a lower bound, not an estimate — counting it at 60s would
-  underestimate the true gap. Use `--include-timeouts` to fold timeouts in at
-  the cap (old behavior).
-- Cross-solver compare via `solver:version`, e.g.
-  `compare_versions.py --versions gurobi:12.0.3 highs:1.15.1.3 --baseline gurobi:12.0.3`.
-- Result set names are canonical: `fast-instances.txt` → `fast`,
-  `super-fast-instances.txt` → `super-fast`, `sets/miplib2017-benchmark` →
-  `miplib2017`. Passed via `--instances-file` or `--instances-root`;
-  `--set` override only for ad-hoc sources.
+```bash
+# N candidates vs one reference (reference may be cross-solver):
+compare_versions.py --set super-fast --versions highs:A highs:B --baseline gurobi:12.0.3
+# chain b<->a, c<->b:
+compare_versions.py --set fast --mode neighbor --versions A B C
+# arbitrary pairs / full grid:
+compare_versions.py --set fast --mode pairwise --versions A B C --pairs "A>B,B>C"
+compare_versions.py --set fast --mode all --versions A B C
+# machine-readable report for automation:
+... --json-out cmp.json
+```
+
+Reports absolute (mean/min/max/median s, saved_s) AND relative (delta %,
+speedup, shifted-geomean ratio) values per pair, plus a versions-x-versions
+ratio matrix. `--include-timeouts` folds timeouts in at the cap (default:
+excluded — a timeout is a lower bound, not an estimate).
+
+## Commit policy
+
+- Success (geomean <= baseline, zero mismatches, gates passed): merge feature
+  branch to master; update changelog/findings/roadmap on master.
+- Failure: `git branch -m feature/<f>/<v> failed/<f>/<v>`; document learning
+  on master; revert master to last good state.
+- Changelog entry MUST include: set used, geomean ratio, faster/slower
+  counts, correctness verdict.
 
 ## Pitfalls (also in changelog Learnings)
 
 - Version bump BEFORE build, or results overwrite.
-- `Version.txt`: `HIGHS_TWEAK=1` (equals sign). CMake regex `HIGHS_TWEAK=(.*)`.
+- `Version.txt`: `HIGHS_TWEAK=1` (equals sign); CMake regex `HIGHS_TWEAK=(.*)`.
 - `HConfig.h.in` must carry `#define HIGHS_VERSION_TWEAK @HIGHS_VERSION_TWEAK@`.
-- Binary cache: `benchmark/binaries/highs-X`; pass via `--highs-bin`.
-- Node presolve is a runtime option (`mip_node_presolve_threshold`, 0 = off);
-  toggling does not need a rebuild.
-- Fast subset is machine-dependent; recreate via discovery + filter_fast.py.
-- Gurobi license at `benchmark/gurobi.lic` (gitignored).
+- Binary hash catches un-bumped edits (cache miss forces rerun) — don't fight
+  it, bump the version.
+- Node presolve is a runtime option (`mip_node_presolve_threshold`, 0 = off):
+  toggling needs no rebuild/TWEAK bump.
+- Gurobi license at `benchmark/gurobi.lic` (gitignored, NEVER commit).
 
 ## Reference
 
-- `docs/optimization-findings.md` — findings, tiers, idioms (READ THIS)
-- `docs/optimization-changelog.md` — version history + learnings
-- `benchmark/README.md` — harness docs
-- `benchmark/super-fast-instances.txt` — machine-dependent fast subset
-- `benchmark/binaries/` — cached built binaries
-- `benchmark/scripts/run_benchmark.py` — benchmark CLI (multi-run, set tracking)
-- `benchmark/scripts/summarize.py` — shifted-geomean + performance profiles
-- `benchmark/scripts/compare_versions.py` — per-instance version comparison
+- `docs/optimization-findings.md` / `-changelog.md` / `-roadmap.md`
+- `benchmark/README.md` — harness docs incl. full flag tables
+- `benchmark/scripts/run_benchmark.py` — runner (cache, repeats)
+- `benchmark/scripts/compare_versions.py` — modular comparator + GT gate
+- `benchmark/scripts/filter_sets.py` — set classification (<10s/<60s)
 - `benchmark/scripts/build_highs.sh` — release build (ccache)
-- `highs/mip/` — MIP solver source
-- `highs/simplex/` — simplex source
+- `highs/mip/`, `highs/simplex/` — MIP/simplex source

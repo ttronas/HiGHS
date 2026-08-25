@@ -1,0 +1,22 @@
+{
+  "dual_bound": 0.0,
+  "gap": Infinity,
+  "gurobi_error": null,
+  "instance": "supportcase19.mps",
+  "instance_file": "sets/miplib2017-benchmark/supportcase19.mps.gz",
+  "instance_hash": "c6cfa9c6bd1e9d2a56e55e9b8d9c7f19630d6d26afe0d1eebb2cfdddf4c3fcb8",
+  "instance_set": "miplib2017",
+  "machine": "13th-gen-intel-r-core-tm-i7-1355u-12cpu-15-5g",
+  "mip_gap_tol": 0.0001,
+  "nodes": 1,
+  "objective": Infinity,
+  "options_hash": "4e9294bae8cb42af",
+  "returncode": 0,
+  "run_date": "2026-08-21T06:42:24+00:00",
+  "runtime_s": 60.11396908760071,
+  "solver": "gurobi",
+  "solver_version": "12.0.3",
+  "status": "time_limit",
+  "threads": 12,
+  "time_limit": 60.0
+}

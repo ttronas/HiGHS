@@ -9,7 +9,9 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = []
+dev = [
+    "pytest>=8.0",
+]
 
 [tool.uv]
 managed = true

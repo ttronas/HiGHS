@@ -1,0 +1,22 @@
+{
+  "dual_bound": 0.0,
+  "gap": Infinity,
+  "gurobi_error": null,
+  "instance": "highschool1-aigio.mps",
+  "instance_file": "sets/miplib2017-benchmark/highschool1-aigio.mps.gz",
+  "instance_hash": "285c05189bea919640e599fbc99f2e8fc68951348d32919f570a79dc323aeab6",
+  "instance_set": "miplib2017",
+  "machine": "13th-gen-intel-r-core-tm-i7-1355u-12cpu-15-5g",
+  "mip_gap_tol": 0.0001,
+  "nodes": 1,
+  "objective": Infinity,
+  "options_hash": "4e9294bae8cb42af",
+  "returncode": 0,
+  "run_date": "2026-08-21T04:53:19+00:00",
+  "runtime_s": 60.01496195793152,
+  "solver": "gurobi",
+  "solver_version": "12.0.3",
+  "status": "time_limit",
+  "threads": 12,
+  "time_limit": 60.0
+}
