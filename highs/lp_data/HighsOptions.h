@@ -1222,7 +1222,7 @@ class HighsOptions : public HighsOptionsStruct {
 
     record_double = new OptionRecordDouble(
         "mip_heuristic_effort", "Effort spent for MIP heuristics", advanced,
-        &mip_heuristic_effort, 0.0, 0.05, 1.0);
+        &mip_heuristic_effort, 0.0, 0.08, 1.0);
     records.push_back(record_double);
 
     record_bool =
@@ -1249,12 +1249,12 @@ class HighsOptions : public HighsOptionsStruct {
 
     record_bool = new OptionRecordBool("mip_heuristic_run_zi_round",
                                        "Use the ZI Round heuristic", advanced,
-                                       &mip_heuristic_run_zi_round, false);
+                                       &mip_heuristic_run_zi_round, true);
     records.push_back(record_bool);
 
     record_bool = new OptionRecordBool("mip_heuristic_run_shifting",
                                        "Use the Shifting heuristic", advanced,
-                                       &mip_heuristic_run_shifting, false);
+                                       &mip_heuristic_run_shifting, true);
     records.push_back(record_bool);
 
     record_bool = new OptionRecordBool(

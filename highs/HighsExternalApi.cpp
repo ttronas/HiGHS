@@ -60,7 +60,8 @@ bool HighsExternalApi::tryLoad(const std::string& path) {
       try {
         // Check ABI compatibility
         std::string highs_version = STRINGFY(HIGHS_VERSION_MAJOR) "." STRINGFY(
-            HIGHS_VERSION_MINOR) "." STRINGFY(HIGHS_VERSION_PATCH);
+            HIGHS_VERSION_MINOR) "." STRINGFY(HIGHS_VERSION_PATCH) "." STRINGFY(
+            HIGHS_VERSION_TWEAK);
 
         std::string extras_version =
             inst.library_.call<get_version_t>("HighsExtras_getVersion");
