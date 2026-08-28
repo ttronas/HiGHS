@@ -18,9 +18,159 @@ code. Companion docs:
 
 ## Optimization Taxonomy
 
-_(none yet — add rows as ideas are identified)_
+### 1 — Enable zi_round + shifting + heuristic_effort sweep
+- Component: highs/mip/HighsPrimalHeuristics.cpp | highs/lp_data/HighsOptions.h:1228
+- Idea: Flip `mip_heuristic_run_zi_round`/`mip_heuristic_run_shifting` from false to true and sweep `mip_heuristic_effort` 0.05→0.10/0.15. Rounding heuristics close primal gap early; cheap vs sub-MIP.
+- Expected signal: `heuristic_lp_iterations` up, `MipDivePrimalHeuristics`/`DiveRins/Rens` clocks move, incumbent found earlier (`numImprovingSols` up), `pruned_treeweight` faster
+- Validation: `compare_versions.py` vs `gurobi` GT — zero mismatches; `ctest -R` primal heuristic tests
+- Tier: 1
+- Status: proposed
 
-Row format:
+### 2 — Tune cutpool age/soft limits
+- Component: highs/lp_data/HighsOptions.h:1175-1193 | highs/mip/HighsCutPool.cpp | highs/mip/HighsLpRelaxation.cpp
+- Idea: Grid `mip_pool_age_limit` 30, `mip_pool_soft_limit` 10000, `mip_lp_age_limit` 10. Retaining cuts helps bound but bloats LP.
+- Expected signal: `Perform aging` time down with higher limits, `separation rounds` stable, `DuSimplexBasisSolveLp` iter/node tradeoff
+- Validation: geomean on `super-fast`/`fast` at 60s; check `mip_pool_soft_limit` invariant `cutpools.size() ≤ soft_limit * factor`
+- Tier: 1
+- Status: proposed
+
+### 3 — Fix CMIR min violation 0.001*feastol
+- Component: highs/mip/HighsCutGeneration.cpp:603 | highs/mip/HighsTransformedLp.h
+- Idea: Implement TODO: drop cuts with violation < 0.001*feastol + tighten efficacy/density filters. Filters weak cuts without correctness risk.
+- Expected signal: `separation rounds up` or flat, `cutset.numCuts` filtered, `total_lp_iterations` down (less bloat)
+- Validation: unit: cut violation ≥ threshold; `compare_versions.py` PASS
+- Tier: 1
+- Status: proposed
+
+### 4 — Per-separator MIP profiling
+- Component: highs/mip/HighsSeparation.cpp:28-34 | highs/mip/MipTimer.h:164-174 | HighsImplications | HighsCliqueTable
+- Idea: Uncomment `kImplboundSepa`/`kCliqueSepa`/`kTableauSepa`/`kPathAggrSepa`/`kModKSepa` clocks (currently hardcoded 990/991). Instrument only, no solver change. Enables data for Tier 2 cuts.
+- Expected signal: `MipSeparation` clocks report per instance in `reportMipSeparationClock`
+- Validation: `HighsMipSolver::run()` completes; `MipTimer` clocks non-zero
+- Tier: 1
+- Status: proposed
+
+### 5 — Batch flushDomain bound changes
+- Component: highs/mip/HighsLpRelaxation.cpp | highs/mip/HighsMipSolver.cpp
+- Idea: Batch column-bound changes per `flushDomain` / `resolveLp` call to reduce simplex warm-start overhead. Small refactor, no logic change.
+- Expected signal: `Solve LP - du simplex basis` time down per node, `num_nodes` flat
+- Validation: LP `Status kOptimal` count unchanged; `ctest -R HighsLpRelaxation`
+- Tier: 1
+- Status: proposed
+
+### 6 — Probing lifting / symmetry / root-presolve-only toggles
+- Component: highs/presolve/HPresolve.cpp | highs/presolve/HighsSymmetry.h | highs/lp_data/HighsOptions.h:1098-1161
+- Idea: Sweep `mip_lifting_for_probing -1→0/1/2`, `mip_detect_symmetry false→true` (binary models), `mip_root_presolve_only false→true`. Cheap presolve diversity.
+- Expected signal: `Probing - presolve` / `Enumeration - presolve` time up but `num integer cols` down, `num nodes` down on binaries
+- Validation: `mip_detect_symmetry` only stabilizes orbitopes; check `symmetries.numGenerators` log
+- Tier: 1
+- Status: proposed
+
+### 7 — Tune pscost_minreliable + cliquetable parallelism threshold
+- Component: highs/mip/HighsPseudocost.cpp | highs/mip/HighsCliqueTable.cpp | highs/lp_data/HighsOptions.h:1196-1209
+- Idea: Sweep `mip_pscost_minreliable 8→4/12` (reliability branching) and `mip_min_cliquetable_entries_for_parallelism 100000→50000/200000`. Trades strong-branch cost vs branching quality.
+- Expected signal: `sb_lp_iterations` vs `total_lp_iterations` ratio moves; `getNumNeighbourhoodQueries` parallel path hit rate
+- Validation: pseudocost update determinism; `HighsPseudocost` unit
+- Tier: 1
+- Status: proposed
+
+### 8 — Adaptive RENS/RINS fixing-rate
+- Component: highs/mip/HighsPrimalHeuristics.cpp:249-273,627 | highs/mip/HighsMipSolverData.cpp:669
+- Idea: Replace naive `low/highFixingRate 0.6` with observation-driven adaptation (`infeasObservations`/`successObservations`) already partially present but under-tuned; sweep sub-MIP leaf/node budgets `500 / 200+nodes/20 / stall 12`.
+- Expected signal: `Sub-MIP solves` time vs `numImprovingSols` tradeoff, fixing-rate log moves toward observed success
+- Validation: `solveSubMip` returns deterministic vs seed; check `worker.terminatorTerminated()` path
+- Tier: 1
+- Status: proposed
+
+### 9 — GMI/Gomory separator
+- Component: highs/mip/HighsTableauSeparator.* | highs/mip/HighsCutGeneration.*
+- Idea: Implement Gomory mixed-integer cuts from tableau rows (add to `HighsSeparation::separators` at `HighsSeparation.cpp:38-41`). Gurobi "more aggressive Gomory" closes gap at root.
+- Expected signal: root LP objective `firstobj→lastobj` gap closed up, `separation rounds up`, `sepa_lp_iterations` up modestly
+- Validation: cut validity: `cutpool.separate` checks `feastol`; LP `addCuts` not cut off optimal integer
+- Tier: 2
+- Status: proposed
+
+### 10 — Zero-half cuts
+- Component: new highs/mip/HighsZeroHalfSeparator.* | highs/mip/HighsSeparation.*
+- Idea: Mod-2 parity cuts via Gaussian elimination on binary rows. Covers Gurobi `ZeroHalfCuts` family.
+- Expected signal: `ZeroHalf` pool entries, `num nodes` down on binary instance subset
+- Validation: parity correctness: cut coeffs 0/0.5→int; check `HighsDomain::isFixed` not broken
+- Tier: 2
+- Status: proposed
+
+### 11 — Flow-cover / GUB-cover cuts
+- Component: new highs/mip/HighsFlowCoverSeparator.* | highs/mip/HighsPathSeparator.cpp
+- Idea: Systematic flow-cover generation beyond single `PathSeparator` aggregation. Targets fixed-charge network structure.
+- Expected signal: `PathAggrSepa` / new `FlowCover` clock time, knapsack violation detection up
+- Validation: flow-cover lifting invariants
+- Tier: 2
+- Status: proposed
+
+### 12 — Stronger c-MIR / master-knapsack + aggressive aggregation
+- Component: highs/mip/HighsLpAggregator.* | highs/mip/HighsTransformedLp.*
+- Idea: Replace single-row `cmirCutGenerationHeuristic` with multi-row aggregation (as Gurobi13 master-knapsack). Re-use `HighsTransformedLp` bound substitution via `implications.bestVub/Vlb`.
+- Expected signal: stronger cut coefficients (lower density), stronger root bound `lp->getObjective()` vs `rootlpsolobj`
+- Validation: aggregation `HighsLpAggregator` numerical stability; check coefficient magnitude `< kHighsInf`
+- Tier: 2
+- Status: proposed
+
+### 13 — Infeasible-solution pool for RINS
+- Component: highs/mip/HighsMipSolverData.cpp | highs/mip/HighsPrimalHeuristics::RINS | highs/mip/HighsPrimalHeuristics.h
+- Idea: Keep rounded root-LP / dual-presolve-cutoff / rejected heuristic sols as infeasible seeds for RINS (Gurobi13 11% first-feasible). Currently only incumbent + relaxation used.
+- Expected signal: `RINS` attempts up, first incumbent time down, `numImprovingSols` earlier
+- Validation: pool solutions remain infeasible-allowed; verify `solutionRowFeasible` filter not leaking into incumbent
+- Tier: 2
+- Status: proposed
+
+### 14 — Multi-reference RENS (mRENS)
+- Component: highs/mip/HighsPrimalHeuristics::RENS:394
+- Idea: RENS from multiple reference sols (root LP + incumbent + analytic centre) rather than single. SCIP mRENS 41% gap reduction.
+- Expected signal: RENS sub-MIP solves up, but solutions per `solveSubMip` more diverse
+- Validation: distinct `colLower/colUpper` per reference; sub-MIP not duplicate
+- Tier: 2
+- Status: proposed
+
+### 15 — Degenerate moves + reliability branching
+- Component: highs/mip/HighsSearch.cpp:selectBranchingCandidate | highs/mip/HighsPseudocost.* | highs/mip/HighsLpRelaxation::computeBasicDegenerateDuals
+- Idea: Explore optimal face (`degenerate moves` / `computeBasicDegenerateDuals`) for fewer integer infeasibilities before heuristics; use Driebeek penalties more often. Mirrors Gurobi12 0.9% branching gain.
+- Expected signal: `Dive` / `Evaluate node` heuristic success up, `pseudocost` degeneracyFactor scaling
+- Validation: degenerate duals keep LP optimal basis; check `worker.getPseudocost()` sync
+- Tier: 2
+- Status: proposed
+
+### 16 — OBBT + LU aggregator presolve
+- Component: highs/presolve/HPresolve.cpp
+- Idea: Add optimization-based bound tightening for on-off constraints + LU-based aggressive equality aggregation (Gurobi13). Requires presolve loop integration.
+- Expected signal: `Run presolve` time up but model rows/cols reduction % up, `num nodes` down
+- Validation: `HighsPostsolveStack` round-trip; `checkSolution` with analytic centre
+- Tier: 2
+- Status: proposed
+
+### 17 — Fix FeasibilityJump 64-bit
+- Component: highs/mip/HighsFeasibilityJump.cpp:19 | highs/mip/feasibilityjump.hh:745
+- Idea: Port 32-bit-only FJ (`TODO 32-bit`) to 64-bit, add move types TODO 745. FJ already top heuristic at root `mip_heuristic_run_feasibility_jump true`.
+- Expected signal: `Feasibility jump` clock active on x86-64, FJ incumbents up
+- Validation: 64-bit integer overflow watch; `ctest -R feasibility`
+- Tier: 2
+- Status: proposed
+
+### 18 — HiPO concurrent at root
+- Component: highs/mip/HighsMipSolverData::startAnalyticCenterComputation:409 | highs/mip/HighsLpRelaxation.* | highs/lp_data/HighsOptions.h
+- Idea: Race simplex vs HiPO/IPX at root (as analytic centre already races via `TaskGroup`). Pick first to finish; keep basis path warm for tree.
+- Expected signal: `Solve LP: HiPO/IPX` clocks vs `DuSimplexBasisSolveLp`; root time down on dense models
+- Validation: fallback to simplex on HiPO fail as in `HighsMipSolverData.cpp:474`; objective tolerance vs GT
+- Tier: 2
+- Status: proposed
+
+### 19 — Parallel tree search (Tier 3, needs approval)
+- Component: highs/mip/HighsMipSolver.cpp:272-350 | highs/mip/HighsMipWorker.* | highs/parallel/HighsParallel.h
+- Idea: Work stealing, async cut/conflict sync, deterministic `parallelLockActive` sync. Biggest hardware-dependent gain.
+- Expected signal: multi-core speedup 2-4x on >100s subset at 12 threads (Gurobi parallelism pdf)
+- Validation: deterministic-vs-opportunistic mode via `mip_search_simulate_concurrency`; stress with `threads=12`
+- Tier: 3
+- Status: proposed
+
+Row format (keep for new entries):
 
 ```
 ### <idea name>

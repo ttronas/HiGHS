@@ -41,7 +41,8 @@
 #define STRINGFY0(s) #s
 const char* highsVersion() {
   return STRINGFY(HIGHS_VERSION_MAJOR) "." STRINGFY(
-      HIGHS_VERSION_MINOR) "." STRINGFY(HIGHS_VERSION_PATCH);
+      HIGHS_VERSION_MINOR) "." STRINGFY(HIGHS_VERSION_PATCH) "." STRINGFY(
+      HIGHS_VERSION_TWEAK);
 }
 HighsInt highsVersionMajor() { return HIGHS_VERSION_MAJOR; }
 HighsInt highsVersionMinor() { return HIGHS_VERSION_MINOR; }
