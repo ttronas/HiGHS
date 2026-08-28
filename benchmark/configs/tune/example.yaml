@@ -1,0 +1,52 @@
+# Example search space for HiGHS MIP tuning.
+# All HiGHS options are changeable — list only those you want tuned here.
+# Omit = fixed at default. Agents/users edit this file.
+#
+# Supported types: float, int, categorical, bool
+# For float/int you may add log: true  (samples in log space).
+#
+# Example runs with:
+#   uv run python scripts/sample_train.py --source super-fast-instances.txt --k 8 --seed 0
+#   uv run python scripts/tune.py --train-set super-small-instances.txt --n-trials 100 --search-space configs/tune/example.yaml
+#   uv run python scripts/tune.py --train-set super-small-instances.txt --n-trials 5000 --search-space configs/tune/large.yaml
+
+# Heuristics
+mip_heuristic_effort:
+  type: float
+  low: 0.0
+  high: 1.0
+
+mip_heuristic_run_feasibility_jump:
+  type: categorical
+  choices: [true, false]
+
+mip_heuristic_run_rins:
+  type: categorical
+  choices: [true, false]
+
+# Search
+mip_pscost_minreliable:
+  type: int
+  low: 0
+  high: 20
+
+mip_lp_age_limit:
+  type: int
+  low: 0
+  high: 20
+
+mip_pool_age_limit:
+  type: int
+  low: 5
+  high: 60
+
+# Cuts
+mip_pool_soft_limit:
+  type: int
+  low: 1000
+  high: 20000
+
+# Presolve (categorical string)
+presolve:
+  type: categorical
+  choices: ["off", "choose", "on"]

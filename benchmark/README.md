@@ -94,6 +94,8 @@ uv run python scripts/run_benchmark.py --solver gurobi --force --subset 1
 | `--force` | off | ignore the cache and re-run |
 | `--highs-bin` | build/bin/highs | HiGHS executable (cached builds live in `binaries/`) |
 | `--highs-parallel` | on | pass `--parallel on|off` to the HiGHS binary |
+| `--highs-options` | — | JSON string of HiGHS options (no rebuild, e.g. `'{"presolve":"off"}'`) |
+| `--highs-options-file` | — | YAML/JSON file mapping option→value (all params changeable, per-trial file isolated per worker) |
 
 ## Test-set ladder
 
@@ -115,6 +117,21 @@ is a merge candidate. Every comparison goes through
 `scripts/compare_versions.py` (see below): correctness against the committed
 Gurobi ground truth is non-negotiable — mismatching instances are INVALID
 SIGNAL and fail the run.
+
+For hyperparameter sweeps, derive a tiny train set from `super-fast`:
+
+```bash
+uv run python scripts/sample_train.py --source super-fast-instances.txt --k 8 --seed 0   # deterministic, same 8 across all workers
+uv run python scripts/sample_train.py --source super-fast-instances.txt --k all --seed 0  # or use entire super-fast
+```
+
+Then tune via Optuna (no rebuild per trial — options injected via per-trial file):
+
+```bash
+uv run python scripts/tune.py --train-set super-small-instances.txt --search-space configs/tune/example.yaml --n-trials 100 --time-limit 15 --test-set miplib2017
+# 100 for small spaces, 1000-5000 for large. --n-trials takes any integer.
+# Scoring locked: wrong vs ground truth = -1e6, timeout = -1e3, optimal = 1000/(t+10). Higher is better.
+```
 
 ## Try it now with the bundled examples
 

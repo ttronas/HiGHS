@@ -142,12 +142,22 @@ excluded — a timeout is a lower bound, not an estimate).
   toggling needs no rebuild/TWEAK bump.
 - Gurobi license at `benchmark/gurobi.lic` (gitignored, NEVER commit).
 
+## Hyperparameter tuning (no rebuild)
+
+1. `uv run python scripts/sample_train.py --source super-fast-instances.txt --k 8 --seed 0` — deterministic (same 8 across all workers); `--k all` uses entire super-fast.
+2. Edit `benchmark/configs/tune/*.yaml` — any `HighsOptions.h` param (all changeable). Omit = default.
+3. `uv run python scripts/tune.py --train-set super-small-instances.txt --search-space configs/tune/example.yaml --n-trials 100 --time-limit 15` — per-trial `workdir/trial_*.opts` via `--options_file`, isolated per worker; no rebuild. `--n-trials` any integer (100 small, 1000-5000 large).
+   Locked scoring: wrong vs GT `-1e6`, timeout `-1e3`, optimal `1000/(t+10)`; study mean, `direction=maximize`.
+4. Validate best on full set: re-run `run_benchmark` with `best_params.yaml` or `tune.py --test-set` then `compare_versions`.
+
 ## Reference
 
 - `docs/optimization-findings.md` / `-changelog.md` / `-roadmap.md`
 - `benchmark/README.md` — harness docs incl. full flag tables
-- `benchmark/scripts/run_benchmark.py` — runner (cache, repeats)
+- `benchmark/scripts/run_benchmark.py` — runner (cache, repeats, `--highs-options*` no rebuild)
 - `benchmark/scripts/compare_versions.py` — modular comparator + GT gate
 - `benchmark/scripts/filter_sets.py` — set classification (<10s/<60s)
+- `benchmark/scripts/sample_train.py` — deterministic train sampler (`--k 8|all --seed 0`)
+- `benchmark/scripts/tune.py` — Optuna tuning (yaml search space, locked magnitudes)
 - `benchmark/scripts/build_highs.sh` — release build (ccache)
 - `highs/mip/`, `highs/simplex/` — MIP/simplex source

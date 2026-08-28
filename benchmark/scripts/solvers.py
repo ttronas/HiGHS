@@ -36,6 +36,7 @@ class RunParams:
     mip_gap: float = 1e-4
     # HiGHS-specific knobs (ignored by drivers that don't need them)
     highs_parallel: str = "on"
+    highs_options: dict[str, Any] = field(default_factory=dict)
     instance_hash: str = ""
     options_hash: str = ""
     machine: str = ""
@@ -59,7 +60,7 @@ class Solver:
 
     # -- helpers ---------------------------------------------------------
     def _base_record(self, instance: Path, params: RunParams) -> dict[str, Any]:
-        return {
+        rec: dict[str, Any] = {
             "solver": self.name,
             "solver_version": self.version(),
             "instance": instance.stem,
@@ -72,6 +73,9 @@ class Solver:
             "options_hash": params.options_hash,
             "run_date": params.run_date,
         }
+        if params.highs_options:
+            rec["highs_options"] = dict(params.highs_options)
+        return rec
 
 
 # ------------------------------------------------------------------------
@@ -121,6 +125,30 @@ class HiGHSSolver(Solver):
                 self._commit = None
         return self._commit
 
+    @staticmethod
+    def _write_options_file(highs_options: dict[str, Any], workdir: Path,
+                            stem: str) -> Path | None:
+        if not highs_options:
+            return None
+        # One file per (trial, instance) — unique even with parallel workers.
+        # Caller ensures workdir exists; use instance stem + hash fragment.
+        import hashlib, json as _json
+        tag = _json.dumps(highs_options, sort_keys=True)
+        digest = hashlib.sha256(tag.encode()).hexdigest()[:8]
+        opts_file = workdir / f"{stem}.highs_{digest}.opts"
+        lines: list[str] = []
+        for k, v in sorted(highs_options.items()):
+            if isinstance(v, bool):
+                v_str = "on" if v else "off" if k in ("presolve", "parallel") else str(v).lower()
+                # bool options in HiGHS accept true/false as well; keep lower
+                if k not in ("presolve", "parallel") and v_str in ("on", "off"):
+                    v_str = str(v).lower()
+            else:
+                v_str = str(v)
+            lines.append(f"{k} = {v_str}")
+        opts_file.write_text("\n".join(lines) + "\n")
+        return opts_file
+
     def solve(self, instance: Path, params: RunParams, workdir: Path) -> dict[str, Any]:
         sol_file = workdir / f"{instance.stem}.sol"
         log_file = workdir / f"{instance.stem}.log"
@@ -132,6 +160,11 @@ class HiGHSSolver(Solver):
             "--parallel", params.highs_parallel,
             "--solution_file", str(sol_file),
         ]
+        opts_file: Path | None = None
+        if params.highs_options:
+            opts_file = self._write_options_file(params.highs_options, workdir, instance.stem)
+            if opts_file is not None:
+                cmd += ["--options_file", str(opts_file)]
         t0 = time.monotonic()
         # Log goes to stdout (output_flag default on); keep it for parsing.
         proc = subprocess.run(cmd, stdout=subprocess.PIPE,
@@ -148,6 +181,8 @@ class HiGHSSolver(Solver):
         record["gap"] = None
         record["binary_sha256"] = self.binary_hash()
         record["highs_source_commit"] = self.source_commit()
+        if opts_file is not None:
+            record["highs_options_file"] = str(opts_file)
 
         if proc.returncode != 0 or not sol_file.exists():
             return record

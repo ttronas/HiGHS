@@ -36,6 +36,12 @@ from common import (  # noqa: E402
     sha256_file,
     utcnow_iso,
 )
+
+try:
+    import yaml as _yaml  # noqa: F401
+    _HAS_YAML = True
+except ImportError:
+    _HAS_YAML = False
 from solvers import KNOWN_SOLVERS, RunParams, make_solvers  # noqa: E402
 
 # Auto-repeat rule: solves faster than this are re-run so timing noise is
@@ -211,6 +217,12 @@ def main() -> int:
                     help="ignore cached results: re-benchmark instances that "
                          "already have a results file (identical to --force "
                          "for the cache-skip decision; kept as a distinct flag)")
+    ap.add_argument("--highs-options", type=str, default=None,
+                    help="JSON string of HiGHS options passed without rebuild "
+                         "(e.g. '{\"presolve\":\"off\",\"mip_heuristic_effort\":0.2}')")
+    ap.add_argument("--highs-options-file", type=Path, default=None,
+                    help="YAML or JSON file mapping HiGHS option name -> value "
+                         "(all params changeable; no rebuild needed)")
     ap.add_argument("--workdir", type=Path, default=None,
                     help="scratch dir for temp files (default $TMPDIR/benchmark)")
     args = ap.parse_args()
@@ -296,6 +308,40 @@ def main() -> int:
             return 1
         auto_repeats = False
 
+    # ---- HiGHS runtime options (no rebuild needed) -----------------
+    highs_options: dict = {}
+    if args.highs_options:
+        import json as _json
+        try:
+            highs_options.update(_json.loads(args.highs_options))
+        except Exception as exc:
+            print(f"error: --highs-options invalid JSON: {exc}")
+            return 1
+    if args.highs_options_file:
+        if not args.highs_options_file.is_file():
+            print(f"error: --highs-options-file not found: {args.highs_options_file}")
+            return 1
+        import json as _json
+        text = args.highs_options_file.read_text()
+        try:
+            if args.highs_options_file.suffix in (".yaml", ".yml"):
+                if not _HAS_YAML:
+                    print("error: YAML options file requires pyyaml (uv sync)")
+                    return 1
+                import yaml as _yaml2
+                data = _yaml2.safe_load(text) or {}
+            else:
+                data = _json.loads(text)
+        except Exception as exc:
+            print(f"error: parsing {args.highs_options_file}: {exc}")
+            return 1
+        if not isinstance(data, dict):
+            print(f"error: {args.highs_options_file} must contain a mapping")
+            return 1
+        highs_options.update(data)
+    if highs_options:
+        print(f"highs_options: {highs_options}")
+
     provenance = git_provenance(repo)
 
     all_ok = True
@@ -311,12 +357,14 @@ def main() -> int:
             ih = sha256_file(inst)
             oh = options_hash(threads=args.threads, time_limit=args.time_limit,
                               mip_gap=args.mip_gap, highs_parallel=args.highs_parallel,
-                              repeats_policy=args.repeats)
+                              repeats_policy=args.repeats,
+                              highs_options=highs_options)
             params = RunParams(
                 threads=args.threads,
                 time_limit=args.time_limit,
                 mip_gap=args.mip_gap,
                 highs_parallel=args.highs_parallel,
+                highs_options=highs_options,
                 instance_hash=ih,
                 options_hash=oh,
                 machine=machine,
