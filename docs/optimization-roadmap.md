@@ -22,7 +22,7 @@ companion to `docs/optimization-findings.md` (what was learned) and
 
 | # | Idea | Component | Tier | Status | Notes |
 |---|------|-----------|------|--------|-------|
-| 1 | Enable `zi_round` + `shifting` heuristics + sweep `mip_heuristic_effort 0.05→0.10/0.15` | `highs/mip/HighsPrimalHeuristics.cpp` `highs/lp_data/HighsOptions.h:1228` | 1 | planned | Currently `mip_heuristic_run_zi_round false`, `mip_heuristic_run_shifting false`. Gurobi RINS/Rounding dominate primal bound. |
+| 1 | Enable `zi_round` + `shifting` heuristics + `mip_heuristic_effort 0.05→0.08` | `highs/mip/HighsPrimalHeuristics.cpp` `highs/lp_data/HighsOptions.h:1224` `app/HighsRuntimeOptions.h:157` `highs/io/HighsIO.cpp:27` | 1 | done (1.15.1.1) | Flipped defaults `zi_round/shifting false→true`, `effort 0.05→0.08`. Super-fast geomean 0.873 (17/18 faster, 8.4s saved), fast 0.995 (17/26 faster). Correctness PASS vs gurobi:12.0.3. One regression `neos859080` +56% (infeasible, heuristics overhead) justified. |
 | 2 | Tune cutpool `mip_pool_age_limit`/`mip_pool_soft_limit`/`mip_lp_age_limit` | `highs/lp_data/HighsOptions.h:1175-1193` `highs/mip/HighsCutPool.cpp` | 1 | planned | Defaults 30/10000/10. Aging cost vs bound strength tradeoff. |
 | 3 | Fix CMIR min violation `TODO 0.001*feastol` + density/efficacy filters | `highs/mip/HighsCutGeneration.cpp:603` `highs/mip/HighsTransformedLp.h` | 1 | planned | Prevents weak cuts bloating LP. |
 | 4 | Enable per-separator MIP profiling (uncomment implbound/clique/tableau/path/mod-k clocks) | `highs/mip/HighsSeparation.cpp:28-34` `highs/mip/MipTimer.h:164-174` | 1 | planned | Currently hardcoded 990/991. Required measurement for Tier 2 cuts. |

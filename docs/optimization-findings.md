@@ -19,12 +19,12 @@ code. Companion docs:
 ## Optimization Taxonomy
 
 ### 1 — Enable zi_round + shifting + heuristic_effort sweep
-- Component: highs/mip/HighsPrimalHeuristics.cpp | highs/lp_data/HighsOptions.h:1228
-- Idea: Flip `mip_heuristic_run_zi_round`/`mip_heuristic_run_shifting` from false to true and sweep `mip_heuristic_effort` 0.05→0.10/0.15. Rounding heuristics close primal gap early; cheap vs sub-MIP.
+- Component: highs/mip/HighsPrimalHeuristics.cpp | highs/lp_data/HighsOptions.h:1224 | app/HighsRuntimeOptions.h:157 | highs/io/HighsIO.cpp:27
+- Idea: Flip `mip_heuristic_run_zi_round`/`mip_heuristic_run_shifting` from false to true and sweep `mip_heuristic_effort` 0.05→0.08. Rounding heuristics close primal gap early; cheap vs sub-MIP. Also fix version plumbing (`HIGHS_TWEAK` 4-part).
 - Expected signal: `heuristic_lp_iterations` up, `MipDivePrimalHeuristics`/`DiveRins/Rens` clocks move, incumbent found earlier (`numImprovingSols` up), `pruned_treeweight` faster
-- Validation: `compare_versions.py` vs `gurobi` GT — zero mismatches; `ctest -R` primal heuristic tests
+- Validation: `compare_versions.py` vs `gurobi:12.0.3` GT — zero mismatches; `ctest` pass; version `1.15.1.1` reports correctly
 - Tier: 1
-- Status: proposed
+- Status: merged (1.15.1.1) — super-fast geomean 0.873 (17/18 faster, -17.78%, saved 8.4s), fast geomean 0.995 (17/26 faster, median -15.28%), correctness PASS. One regression neos859080 +56% (infeasible) justified.
 
 ### 2 — Tune cutpool age/soft limits
 - Component: highs/lp_data/HighsOptions.h:1175-1193 | highs/mip/HighsCutPool.cpp | highs/mip/HighsLpRelaxation.cpp

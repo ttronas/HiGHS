@@ -24,8 +24,9 @@ void highsLogHeader(const HighsLogOptions& log_options,
   const std::string githash_text =
       log_githash ? " (git hash: " + githash_string + ")" : "";
   highsLogUser(log_options, HighsLogType::kInfo,
-               "Running HiGHS %d.%d.%d%s: %s\n", (int)HIGHS_VERSION_MAJOR,
+               "Running HiGHS %d.%d.%d.%d%s: %s\n", (int)HIGHS_VERSION_MAJOR,
                (int)HIGHS_VERSION_MINOR, (int)HIGHS_VERSION_PATCH,
+               (int)HIGHS_VERSION_TWEAK,
                githash_text.c_str(), kHighsCopyrightStatement.c_str());
 
   highsLogUser(log_options, HighsLogType::kInfo, "%s\n",
