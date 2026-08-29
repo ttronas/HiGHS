@@ -67,12 +67,12 @@ code. Companion docs:
 - Status: rejected (1.15.1.6) — `-1→1` gave 4 FAIL mismatches (infeasible vs optimal, wrong obj 243657 vs 65887) — cut off optimal. Keep -1.
 
 ### 7 — Tune pscost_minreliable + cliquetable parallelism threshold
-- Component: highs/mip/HighsPseudocost.cpp | highs/mip/HighsCliqueTable.cpp | highs/lp_data/HighsOptions.h:1196-1209
+- Component: highs/mip/HighsPseudocost.cpp | highs/lp_data/HighsOptions.h:1196
 - Idea: Sweep `mip_pscost_minreliable 8→4/12` (reliability branching) and `mip_min_cliquetable_entries_for_parallelism 100000→50000/200000`. Trades strong-branch cost vs branching quality.
 - Expected signal: `sb_lp_iterations` vs `total_lp_iterations` ratio moves; `getNumNeighbourhoodQueries` parallel path hit rate
 - Validation: pseudocost update determinism; `HighsPseudocost` unit
 - Tier: 1
-- Status: proposed
+- Status: rejected (1.15.1.7) — `8→4` gave 1.036x slower (10/18), neutral. Keep 8.
 
 ### 8 — Adaptive RENS/RINS fixing-rate
 - Component: highs/mip/HighsPrimalHeuristics.cpp:249-273,627 | highs/mip/HighsMipSolverData.cpp:669

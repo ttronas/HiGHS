@@ -17,6 +17,7 @@ commit time. Never skip versions.
 | 1.15.1.4 | per-separator MIP profiling | `feature/enable-mip-profiling/1.15.1.4` | merged — infra 1.10x when enabled |
 | 1.15.1.5 | batch flushDomain | `feature/batch-flushDomain/1.15.1.5` | merged — 0.993x neutral |
 | 1.15.1.6 | probing lifting -1→1 | `failed/probing-lifting-sym/1.15.1.6` | rejected — 4 mismatches FAIL |
+| 1.15.1.7 | pscost 8→4 | `failed/tune-pscost-reliable/1.15.1.7` | rejected — 1.036x slower |
 
 ## Version Entries
 
@@ -56,6 +57,12 @@ commit time. Never skip versions.
 - Benchmark: set=super-fast 4 mismatches FAIL vs gurobi:12.0.3: `exp-1-500-5-5` obj 243657 vs 65887, `ns1116954`/`p200x1188c`/`sp150x300d` infeasible vs optimal — INVALID SIGNAL (cut off feasible)
 - Verdict: rejected — lifting breaks correctness (presolve/probing cuts off optimal). Keep -1.
 
+### 1.15.1.7 — pscost_minreliable 8→4 (REJECTED)
+- Branch: failed/tune-pscost-reliable/1.15.1.7
+- Change: `highs/lp_data/HighsOptions.h:1196` `mip_pscost_minreliable 8→4`
+- Benchmark: set=super-fast geomean 1.036 (10/18 slower, 8 faster, +4.24%) vs 1.15.1.5; correctness PASS
+- Verdict: rejected — 8 well-tuned; 4 adds strong-branch overhead without branching gain.
+
 _(none yet — add one entry per `HIGHS_TWEAK` bump — template below, keep)_
 
 Entry format:
@@ -78,6 +85,7 @@ Recurring pitfalls and harness facts. Add entries as they are discovered.
 - MipTimer: separator clocks must be defined in BOTH `initialiseMipProfilingNames` and `initialiseMipClocks`; `HighsSeparation`/`HighsSeparator` must map `k*SepaString→kMipClock*` and guard with `profiling->mip_` to keep overhead 0 when not analyzing.
 - LpRelaxation: `flushDomain` already batched (single `changeColsBounds` per flush); no further batching gain (0.993x neutral).
 - Presolve probing: `mip_lifting_for_probing 1` breaks correctness (4 mismatches: infeasible, wrong obj) — keep -1.
+- Pseudocost: `mip_pscost_minreliable 8→4` 1.036x slower — 8 already optimal balance strong-branch cost vs reliability.
 
 - Bump `HIGHS_TWEAK` in `Version.txt` BEFORE building — the harness reads the
   version from the binary at runtime; results otherwise overwrite each other.
