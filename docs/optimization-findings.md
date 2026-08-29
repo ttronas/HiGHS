@@ -51,12 +51,12 @@ code. Companion docs:
 - Status: merged (1.15.1.4) — wired 5 clocks, super-fast 1.10x (13/18 slower) overhead when profiling enabled, 0% when off (conditional). Needed for Tier2 cut efficacy.
 
 ### 5 — Batch flushDomain bound changes
-- Component: highs/mip/HighsLpRelaxation.cpp | highs/mip/HighsMipSolver.cpp
-- Idea: Batch column-bound changes per `flushDomain` / `resolveLp` call to reduce simplex warm-start overhead. Small refactor, no logic change.
+- Component: highs/mip/HighsLpRelaxation.cpp:711 | highs/mip/HighsMipSolver.cpp
+- Idea: Batch column-bound changes per `flushDomain` / `resolveLp` call to reduce simplex warm-start overhead. Already single `changeColsBounds` per flush.
 - Expected signal: `Solve LP - du simplex basis` time down per node, `num_nodes` flat
 - Validation: LP `Status kOptimal` count unchanged; `ctest -R HighsLpRelaxation`
 - Tier: 1
-- Status: proposed
+- Status: merged (1.15.1.5) — investigated, already batched, 0.993 geomean (9/9) neutral, PASS. Added comment.
 
 ### 6 — Probing lifting / symmetry / root-presolve-only toggles
 - Component: highs/presolve/HPresolve.cpp | highs/presolve/HighsSymmetry.h | highs/lp_data/HighsOptions.h:1098-1161

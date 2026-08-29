@@ -14,7 +14,8 @@ commit time. Never skip versions.
 | 1.15.1.1 | enable zi_round+shifting, heur_effort 0.08 | `feature/enable-zi-shifting-heur-effort/1.15.1.1` | merged — super-fast 0.873x, fast 0.995x, PASS |
 | 1.15.1.2 | tune cutpool age/soft limits | `failed/tune-cutpool-age/1.15.1.2` | rejected — 1.36x slower |
 | 1.15.1.3 | CMIR viol 0.001*feastol | `failed/fix-cmir-violation/1.15.1.3` | rejected — 1.10x slower |
-| 1.15.1.4 | per-separator MIP profiling | `feature/enable-mip-profiling/1.15.1.4` | merged — infra 1.10x overhead when enabled |
+| 1.15.1.4 | per-separator MIP profiling | `feature/enable-mip-profiling/1.15.1.4` | merged — infra 1.10x when enabled |
+| 1.15.1.5 | batch flushDomain | `feature/batch-flushDomain/1.15.1.5` | merged — 0.993x neutral |
 
 ## Version Entries
 
@@ -42,6 +43,12 @@ commit time. Never skip versions.
 - Benchmark: set=super-fast geomean 1.10 (13/18 slower, 5 faster) vs 1.15.1.1; correctness PASS; overhead only when `highs_analysis_level & kHighsAnalysisLevelMipTime` (default off); enables Tier2 cut breakdown via `reportMipSeparationClock`/`csvMipClock`
 - Verdict: merged — instrumentation, not perf; required for Tier2.
 
+### 1.15.1.5 — batch flushDomain (trivial)
+- Branch: feature/batch-flushDomain/1.15.1.5
+- Change: `highs/mip/HighsLpRelaxation.cpp:711` add batch comment; already single `changeColsBounds` per flush, no logic change.
+- Benchmark: set=super-fast geomean 0.993 (9 faster/9 slower) vs 1.15.1.4; correctness PASS; neutral.
+- Verdict: merged — investigated, already optimal.
+
 _(none yet — add one entry per `HIGHS_TWEAK` bump — template below, keep)_
 
 Entry format:
@@ -62,6 +69,7 @@ Recurring pitfalls and harness facts. Add entries as they are discovered.
 - Cutpool: defaults 30/10000/10 well-tuned; increasing 35/12000/12 bloats LP (1.36x slower on super-fast, HighsCutGeneration bloat).
 - CMIR: `1e-3*feastol` violation filter (1.10x slower) redundant — `minEfficacy` already filters; low-viol high-efficacy cuts via small `sqrnorm` still useful.
 - MipTimer: separator clocks must be defined in BOTH `initialiseMipProfilingNames` and `initialiseMipClocks`; `HighsSeparation`/`HighsSeparator` must map `k*SepaString→kMipClock*` and guard with `profiling->mip_` to keep overhead 0 when not analyzing.
+- LpRelaxation: `flushDomain` already batched (single `changeColsBounds` per flush); no further batching gain (0.993x neutral).
 
 - Bump `HIGHS_TWEAK` in `Version.txt` BEFORE building — the harness reads the
   version from the binary at runtime; results otherwise overwrite each other.
