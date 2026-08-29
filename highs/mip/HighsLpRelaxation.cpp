@@ -709,6 +709,7 @@ void HighsLpRelaxation::notifyCutPoolsLpCopied(HighsInt n) {
 }
 
 void HighsLpRelaxation::flushDomain(HighsDomain& domain, bool continuous) {
+  // Batch flush: single changeColsBounds call per flush (already batched)
   if (!domain.getChangedCols().empty()) {
     if (&domain == &mipsolver.mipdata_->getDomain()) continuous = true;
     currentbasisstored = false;
