@@ -59,12 +59,12 @@ code. Companion docs:
 - Status: merged (1.15.1.5) — investigated, already batched, 0.993 geomean (9/9) neutral, PASS. Added comment.
 
 ### 6 — Probing lifting / symmetry / root-presolve-only toggles
-- Component: highs/presolve/HPresolve.cpp | highs/presolve/HighsSymmetry.h | highs/lp_data/HighsOptions.h:1098-1161
+- Component: highs/presolve/HPresolve.cpp | highs/lp_data/HighsOptions.h:1159
 - Idea: Sweep `mip_lifting_for_probing -1→0/1/2`, `mip_detect_symmetry false→true` (binary models), `mip_root_presolve_only false→true`. Cheap presolve diversity.
 - Expected signal: `Probing - presolve` / `Enumeration - presolve` time up but `num integer cols` down, `num nodes` down on binaries
 - Validation: `mip_detect_symmetry` only stabilizes orbitopes; check `symmetries.numGenerators` log
 - Tier: 1
-- Status: proposed
+- Status: rejected (1.15.1.6) — `-1→1` gave 4 FAIL mismatches (infeasible vs optimal, wrong obj 243657 vs 65887) — cut off optimal. Keep -1.
 
 ### 7 — Tune pscost_minreliable + cliquetable parallelism threshold
 - Component: highs/mip/HighsPseudocost.cpp | highs/mip/HighsCliqueTable.cpp | highs/lp_data/HighsOptions.h:1196-1209

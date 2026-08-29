@@ -16,6 +16,7 @@ commit time. Never skip versions.
 | 1.15.1.3 | CMIR viol 0.001*feastol | `failed/fix-cmir-violation/1.15.1.3` | rejected — 1.10x slower |
 | 1.15.1.4 | per-separator MIP profiling | `feature/enable-mip-profiling/1.15.1.4` | merged — infra 1.10x when enabled |
 | 1.15.1.5 | batch flushDomain | `feature/batch-flushDomain/1.15.1.5` | merged — 0.993x neutral |
+| 1.15.1.6 | probing lifting -1→1 | `failed/probing-lifting-sym/1.15.1.6` | rejected — 4 mismatches FAIL |
 
 ## Version Entries
 
@@ -49,6 +50,12 @@ commit time. Never skip versions.
 - Benchmark: set=super-fast geomean 0.993 (9 faster/9 slower) vs 1.15.1.4; correctness PASS; neutral.
 - Verdict: merged — investigated, already optimal.
 
+### 1.15.1.6 — probing lifting -1→1 (REJECTED)
+- Branch: failed/probing-lifting-sym/1.15.1.6
+- Change: `highs/lp_data/HighsOptions.h:1159` `mip_lifting_for_probing -1→1` (level 1 lifting)
+- Benchmark: set=super-fast 4 mismatches FAIL vs gurobi:12.0.3: `exp-1-500-5-5` obj 243657 vs 65887, `ns1116954`/`p200x1188c`/`sp150x300d` infeasible vs optimal — INVALID SIGNAL (cut off feasible)
+- Verdict: rejected — lifting breaks correctness (presolve/probing cuts off optimal). Keep -1.
+
 _(none yet — add one entry per `HIGHS_TWEAK` bump — template below, keep)_
 
 Entry format:
@@ -70,6 +77,7 @@ Recurring pitfalls and harness facts. Add entries as they are discovered.
 - CMIR: `1e-3*feastol` violation filter (1.10x slower) redundant — `minEfficacy` already filters; low-viol high-efficacy cuts via small `sqrnorm` still useful.
 - MipTimer: separator clocks must be defined in BOTH `initialiseMipProfilingNames` and `initialiseMipClocks`; `HighsSeparation`/`HighsSeparator` must map `k*SepaString→kMipClock*` and guard with `profiling->mip_` to keep overhead 0 when not analyzing.
 - LpRelaxation: `flushDomain` already batched (single `changeColsBounds` per flush); no further batching gain (0.993x neutral).
+- Presolve probing: `mip_lifting_for_probing 1` breaks correctness (4 mismatches: infeasible, wrong obj) — keep -1.
 
 - Bump `HIGHS_TWEAK` in `Version.txt` BEFORE building — the harness reads the
   version from the binary at runtime; results otherwise overwrite each other.
