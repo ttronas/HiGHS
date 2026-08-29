@@ -161,18 +161,11 @@ inline void initialiseMipProfilingNames(std::vector<std::string>& name) {
   name[kMipClockRootSeparationCentralRounding] = "Central rounding";
   name[kMipClockRootSeparationEvaluateRootLp] = "Evaluate root LP";
 
-  /*
-    clock[kMipClockImplboundSepa] =
-    timer_pointer->clock_def(kImplboundSepaString.c_str());
-    clock[kMipClockCliqueSepa] =
-    timer_pointer->clock_def(kCliqueSepaString.c_str());
-    clock[kMipClockTableauSepa] =
-    timer_pointer->clock_def(kTableauSepaString.c_str());
-    clock[kMipClockPathAggrSepa] =
-    timer_pointer->clock_def(kPathAggrSepaString.c_str());
-    clock[kMipClockModKSepa] =
-    timer_pointer->clock_def(kModKSepaString.c_str());
-  */
+  name[kMipClockImplboundSepa] = "Separation: Implied bounds";
+  name[kMipClockCliqueSepa] = "Separation: Clique";
+  name[kMipClockTableauSepa] = "Separation: Tableau";
+  name[kMipClockPathAggrSepa] = "Separation: Path aggregation";
+  name[kMipClockModKSepa] = "Separation: Mod-k";
   // Presolve - Should correspond to kMipClockRunPresolve
   name[kMipClockProbingPresolve] = "Probing - presolve";
   name[kMipClockEnumerationPresolve] = "Enumeration - presolve";
@@ -315,18 +308,16 @@ class MipTimer {
     clock[kMipClockRootSeparationEvaluateRootLp] =
         timer_pointer->clock_def("Evaluate root LP");
 
-    /*
     clock[kMipClockImplboundSepa] =
-        timer_pointer->clock_def(kImplboundSepaString.c_str());
+        timer_pointer->clock_def("Separation: Implied bounds");
     clock[kMipClockCliqueSepa] =
-        timer_pointer->clock_def(kCliqueSepaString.c_str());
+        timer_pointer->clock_def("Separation: Clique");
     clock[kMipClockTableauSepa] =
-        timer_pointer->clock_def(kTableauSepaString.c_str());
+        timer_pointer->clock_def("Separation: Tableau");
     clock[kMipClockPathAggrSepa] =
-        timer_pointer->clock_def(kPathAggrSepaString.c_str());
+        timer_pointer->clock_def("Separation: Path aggregation");
     clock[kMipClockModKSepa] =
-        timer_pointer->clock_def(kModKSepaString.c_str());
-    */
+        timer_pointer->clock_def("Separation: Mod-k");
     // Presolve - Should correspond to kMipClockRunPresolve
     clock[kMipClockProbingPresolve] =
         timer_pointer->clock_def("Probing - presolve");
