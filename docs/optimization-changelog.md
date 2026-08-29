@@ -13,6 +13,7 @@ commit time. Never skip versions.
 | 1.15.1  | upstream baseline (`252ef77`) | `master` | reference |
 | 1.15.1.1 | enable zi_round+shifting, heur_effort 0.08 | `feature/enable-zi-shifting-heur-effort/1.15.1.1` | merged — super-fast 0.873x, fast 0.995x, PASS |
 | 1.15.1.2 | tune cutpool age/soft limits | `failed/tune-cutpool-age/1.15.1.2` | rejected — 1.36x slower |
+| 1.15.1.3 | CMIR viol 0.001*feastol | `failed/fix-cmir-violation/1.15.1.3` | rejected — 1.10x slower |
 
 ## Version Entries
 
@@ -27,6 +28,12 @@ commit time. Never skip versions.
 - Change: `highs/lp_data/HighsOptions.h:1175-1193` `mip_lp_age_limit 10→12`, `mip_pool_age_limit 30→35`, `mip_pool_soft_limit 10000→12000` (keep cuts longer)
 - Benchmark: set=super-fast geomean 1.360 (16/18 slower, 2 faster, +42.29%, saved -22.9s) vs 1.15.1.1; correctness PASS
 - Verdict: rejected — retaining more cuts bloats LP, `DuSimplexBasisSolveLp` time up, `total_lp_iterations` up, no bound gain. Default 30/10000/10 is well-tuned.
+
+### 1.15.1.3 — CMIR min violation 0.001*feastol (REJECTED)
+- Branch: failed/fix-cmir-violation/1.15.1.3
+- Change: `highs/mip/HighsCutGeneration.cpp:603,637,682` add `if (viol < 1e-3*feastol) continue` in 3 efficacy loops to filter weak CMIR cuts (TODO fix)
+- Benchmark: set=super-fast geomean 1.104 (14/18 slower, 4 faster, +13.13%) vs 1.15.1.1; correctness PASS
+- Verdict: rejected — filter too aggressive or scale mismatch removes useful cuts; efficacy filter already `minEfficacy` sufficient. Keep TODO for future tighter density check.
 
 _(none yet — add one entry per `HIGHS_TWEAK` bump — template below, keep)_
 
@@ -46,6 +53,7 @@ Entry format:
 Recurring pitfalls and harness facts. Add entries as they are discovered.
 
 - Cutpool: defaults 30/10000/10 well-tuned; increasing 35/12000/12 bloats LP (1.36x slower on super-fast, HighsCutGeneration bloat).
+- CMIR: `1e-3*feastol` violation filter (1.10x slower) redundant — `minEfficacy` already filters; low-viol high-efficacy cuts via small `sqrnorm` still useful.
 
 - Bump `HIGHS_TWEAK` in `Version.txt` BEFORE building — the harness reads the
   version from the binary at runtime; results otherwise overwrite each other.

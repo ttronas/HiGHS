@@ -35,12 +35,12 @@ code. Companion docs:
 - Status: rejected (1.15.1.2) — 30→35/10000→12000/10→12 gave geomean 1.36x slower (16/18), saved -22.9s. Defaults well-tuned.
 
 ### 3 — Fix CMIR min violation 0.001*feastol
-- Component: highs/mip/HighsCutGeneration.cpp:603 | highs/mip/HighsTransformedLp.h
+- Component: highs/mip/HighsCutGeneration.cpp:603,637,682 | highs/mip/HighsTransformedLp.h
 - Idea: Implement TODO: drop cuts with violation < 0.001*feastol + tighten efficacy/density filters. Filters weak cuts without correctness risk.
 - Expected signal: `separation rounds up` or flat, `cutset.numCuts` filtered, `total_lp_iterations` down (less bloat)
 - Validation: unit: cut violation ≥ threshold; `compare_versions.py` PASS
 - Tier: 1
-- Status: proposed
+- Status: rejected (1.15.1.3) — `1e-3*feastol` filter gave 1.104x slower (14/18, +13.13%), efficacy filter `minEfficacy` already sufficient.
 
 ### 4 — Per-separator MIP profiling
 - Component: highs/mip/HighsSeparation.cpp:28-34 | highs/mip/MipTimer.h:164-174 | HighsImplications | HighsCliqueTable
