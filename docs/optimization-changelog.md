@@ -14,6 +14,7 @@ commit time. Never skip versions.
 | 1.15.1.1 | enable zi_round+shifting, heur_effort 0.08 | `feature/enable-zi-shifting-heur-effort/1.15.1.1` | merged — super-fast 0.873x, fast 0.995x, PASS |
 | 1.15.1.2 | tune cutpool age/soft limits | `failed/tune-cutpool-age/1.15.1.2` | rejected — 1.36x slower |
 | 1.15.1.3 | CMIR viol 0.001*feastol | `failed/fix-cmir-violation/1.15.1.3` | rejected — 1.10x slower |
+| 1.15.1.4 | per-separator MIP profiling | `feature/enable-mip-profiling/1.15.1.4` | merged — infra 1.10x overhead when enabled |
 
 ## Version Entries
 
@@ -35,6 +36,12 @@ commit time. Never skip versions.
 - Benchmark: set=super-fast geomean 1.104 (14/18 slower, 4 faster, +13.13%) vs 1.15.1.1; correctness PASS
 - Verdict: rejected — filter too aggressive or scale mismatch removes useful cuts; efficacy filter already `minEfficacy` sufficient. Keep TODO for future tighter density check.
 
+### 1.15.1.4 — per-separator MIP profiling
+- Branch: feature/enable-mip-profiling/1.15.1.4
+- Change: `highs/mip/MipTimer.h:164,316` uncomment `kMipClockImplbound/Clique/Tableau/Path/ModK` definitions (both `initialiseMipProfilingNames` and `initialiseMipClocks`); `highs/mip/HighsSeparation.cpp:28` `implBound/clique 990/991→kMipClock*` + guard `profiling->mip_`; `highs/mip/HighsSeparator.cpp:19` map `k*SepaString→kMipClock*` + guard `doProfile`
+- Benchmark: set=super-fast geomean 1.10 (13/18 slower, 5 faster) vs 1.15.1.1; correctness PASS; overhead only when `highs_analysis_level & kHighsAnalysisLevelMipTime` (default off); enables Tier2 cut breakdown via `reportMipSeparationClock`/`csvMipClock`
+- Verdict: merged — instrumentation, not perf; required for Tier2.
+
 _(none yet — add one entry per `HIGHS_TWEAK` bump — template below, keep)_
 
 Entry format:
@@ -54,6 +61,7 @@ Recurring pitfalls and harness facts. Add entries as they are discovered.
 
 - Cutpool: defaults 30/10000/10 well-tuned; increasing 35/12000/12 bloats LP (1.36x slower on super-fast, HighsCutGeneration bloat).
 - CMIR: `1e-3*feastol` violation filter (1.10x slower) redundant — `minEfficacy` already filters; low-viol high-efficacy cuts via small `sqrnorm` still useful.
+- MipTimer: separator clocks must be defined in BOTH `initialiseMipProfilingNames` and `initialiseMipClocks`; `HighsSeparation`/`HighsSeparator` must map `k*SepaString→kMipClock*` and guard with `profiling->mip_` to keep overhead 0 when not analyzing.
 
 - Bump `HIGHS_TWEAK` in `Version.txt` BEFORE building — the harness reads the
   version from the binary at runtime; results otherwise overwrite each other.

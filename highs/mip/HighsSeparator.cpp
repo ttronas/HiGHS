@@ -13,20 +13,23 @@
 #include "mip/HighsCutPool.h"
 #include "mip/HighsLpRelaxation.h"
 #include "mip/HighsMipSolver.h"
+#include "mip/MipTimer.h"
 
 HighsSeparator::HighsSeparator(const HighsMipSolver& mipsolver,
                                const std::string& name)
     : numCutsFound(0), numCalls(0) {
-  /*
-  this->clockIndex = -1;
-  // Don't get the clock index when analyse_mip_time is false - as
-  // will generally be the case, and always so for sub-MIPs
-  if (mipsolver.analysis_.analyse_mip_time) {
-    this->clockIndex = mipsolver.analysis_.getSepaClockIndex(name);
-    assert(this->clockIndex > 0);
-  }
-  */
-  this->clockIndex = 999;
+  if (name == kTableauSepaString)
+    this->clockIndex = kMipClockTableauSepa;
+  else if (name == kPathAggrSepaString)
+    this->clockIndex = kMipClockPathAggrSepa;
+  else if (name == kModKSepaString)
+    this->clockIndex = kMipClockModKSepa;
+  else if (name == kImplboundSepaString)
+    this->clockIndex = kMipClockImplboundSepa;
+  else if (name == kCliqueSepaString)
+    this->clockIndex = kMipClockCliqueSepa;
+  else
+    this->clockIndex = kMipClockImplboundSepa;
 }
 
 void HighsSeparator::run(HighsLpRelaxation& lpRelaxation,
@@ -35,11 +38,11 @@ void HighsSeparator::run(HighsLpRelaxation& lpRelaxation,
   ++numCalls;
   HighsInt currNumCuts = cutpool.getNumCuts();
 
-  if (!lpRelaxation.getMipSolver().mipdata_->parallelLockActive())
-    lpRelaxation.getMipSolver().profiling_->start(clockIndex);
+  const bool doProfile = !lpRelaxation.getMipSolver().mipdata_->parallelLockActive() &&
+                         lpRelaxation.getMipSolver().profiling_->mip_;
+  if (doProfile) lpRelaxation.getMipSolver().profiling_->start(clockIndex);
   separateLpSolution(lpRelaxation, lpAggregator, transLp, cutpool);
-  if (!lpRelaxation.getMipSolver().mipdata_->parallelLockActive())
-    lpRelaxation.getMipSolver().profiling_->stop(clockIndex);
+  if (doProfile) lpRelaxation.getMipSolver().profiling_->stop(clockIndex);
 
   numCutsFound += cutpool.getNumCuts() - currNumCuts;
 }

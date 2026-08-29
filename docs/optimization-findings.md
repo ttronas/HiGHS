@@ -43,12 +43,12 @@ code. Companion docs:
 - Status: rejected (1.15.1.3) — `1e-3*feastol` filter gave 1.104x slower (14/18, +13.13%), efficacy filter `minEfficacy` already sufficient.
 
 ### 4 — Per-separator MIP profiling
-- Component: highs/mip/HighsSeparation.cpp:28-34 | highs/mip/MipTimer.h:164-174 | HighsImplications | HighsCliqueTable
-- Idea: Uncomment `kImplboundSepa`/`kCliqueSepa`/`kTableauSepa`/`kPathAggrSepa`/`kModKSepa` clocks (currently hardcoded 990/991). Instrument only, no solver change. Enables data for Tier 2 cuts.
-- Expected signal: `MipSeparation` clocks report per instance in `reportMipSeparationClock`
-- Validation: `HighsMipSolver::run()` completes; `MipTimer` clocks non-zero
+- Component: highs/mip/HighsSeparation.cpp | highs/mip/HighsSeparator.cpp | highs/mip/MipTimer.h:164,316 | HighsImplications | HighsCliqueTable
+- Idea: Uncomment `kImplboundSepa`/`kCliqueSepa`/`kTableauSepa`/`kPathAggrSepa`/`kModKSepa` clocks (hardcoded 990/991→proper `kMipClock*`) and guard with `profiling->mip_` so overhead 0 when not analyzing. Instrument only.
+- Expected signal: `MipSeparation` clocks report per instance in `reportMipSeparationClock` when `highs_analysis_level` has `kHighsAnalysisLevelMipTime`
+- Validation: `HighsMipSolver::run()` completes; `MipTimer` clocks non-zero when enabled; `compare_versions.py` PASS
 - Tier: 1
-- Status: proposed
+- Status: merged (1.15.1.4) — wired 5 clocks, super-fast 1.10x (13/18 slower) overhead when profiling enabled, 0% when off (conditional). Needed for Tier2 cut efficacy.
 
 ### 5 — Batch flushDomain bound changes
 - Component: highs/mip/HighsLpRelaxation.cpp | highs/mip/HighsMipSolver.cpp

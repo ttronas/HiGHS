@@ -21,19 +21,12 @@
 #include "mip/HighsPathSeparator.h"
 #include "mip/HighsTableauSeparator.h"
 #include "mip/HighsTransformedLp.h"
+#include "mip/MipTimer.h"
 
 HighsSeparation::HighsSeparation(HighsMipWorker& mipworker)
     : mipworker_(mipworker) {
-  /*
-  if (mipworker.mipsolver_.profiling_->mip_) {
-    implBoundClock =
-        mipworker.mipsolver_.profiling_->getSepaClockIndex(kImplboundSepaString);
-    cliqueClock =
-        mipworker.mipsolver_.profiling_->getSepaClockIndex(kCliqueSepaString);
-  }
-  */
-  implBoundClock = 990;
-  cliqueClock = 991;
+  implBoundClock = kMipClockImplboundSepa;
+  cliqueClock = kMipClockCliqueSepa;
   const HighsMipSolver& mipsolver = mipworker.getMipSolver();
   separators.emplace_back(new HighsTableauSeparator(mipsolver));
   separators.emplace_back(new HighsPathSeparator(mipsolver));
@@ -89,13 +82,15 @@ HighsInt HighsSeparation::separationRound(HighsDomain& propdomain,
     return numBoundChgs;
   };
 
-  if (!mipdata.parallelLockActive())
+  if (!mipdata.parallelLockActive() &&
+      lp->getMipSolver().profiling_->mip_)
     lp->getMipSolver().profiling_->start(implBoundClock);
   mipdata.implications.separateImpliedBounds(
       *lp, lp->getSolution().col_value, mipworker_.getCutPool(),
       mipdata.feastol, mipworker_.getGlobalDomain(),
       mipdata.parallelLockActive());
-  if (!mipdata.parallelLockActive())
+  if (!mipdata.parallelLockActive() &&
+      lp->getMipSolver().profiling_->mip_)
     lp->getMipSolver().profiling_->stop(implBoundClock);
 
   HighsInt ncuts = 0;
@@ -105,7 +100,8 @@ HighsInt HighsSeparation::separationRound(HighsDomain& propdomain,
   else
     ncuts += numboundchgs;
 
-  if (!mipdata.parallelLockActive())
+  if (!mipdata.parallelLockActive() &&
+      lp->getMipSolver().profiling_->mip_)
     lp->getMipSolver().profiling_->start(cliqueClock);
   mipdata.cliquetable.separateCliques(
       lp->getMipSolver(), sol.col_value, mipworker_.getCutPool(),
@@ -115,7 +111,8 @@ HighsInt HighsSeparation::separationRound(HighsDomain& propdomain,
       mipdata.parallelLockActive()
           ? mipworker_.getNumNeighbourhoodQueries()
           : mipdata.cliquetable.getNumNeighbourhoodQueries());
-  if (!mipdata.parallelLockActive())
+  if (!mipdata.parallelLockActive() &&
+      lp->getMipSolver().profiling_->mip_)
     lp->getMipSolver().profiling_->stop(cliqueClock);
 
   numboundchgs = propagateAndResolve();
