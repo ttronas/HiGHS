@@ -12,6 +12,7 @@ commit time. Never skip versions.
 |---------|---------|--------|--------|
 | 1.15.1  | upstream baseline (`252ef77`) | `master` | reference |
 | 1.15.1.1 | enable zi_round+shifting, heur_effort 0.08 | `feature/enable-zi-shifting-heur-effort/1.15.1.1` | merged — super-fast 0.873x, fast 0.995x, PASS |
+| 1.15.1.2 | tune cutpool age/soft limits | `failed/tune-cutpool-age/1.15.1.2` | rejected — 1.36x slower |
 
 ## Version Entries
 
@@ -20,6 +21,12 @@ commit time. Never skip versions.
 - Change: `highs/lp_data/HighsOptions.h:1224` `mip_heuristic_run_zi_round/shifting false→true`, `mip_heuristic_effort 0.05→0.08`; fix 4-part version: `Version.txt` `HIGHS_TWEAK=1`, `cmake/set-version.cmake` TWEAK parse, `highs/HConfig.h.*` `+TWEAK`, `highs/lp_data/Highs.cpp`/`app/HighsRuntimeOptions.h:157`/`highs/io/HighsIO.cpp:27`/`highs/HighsExternalApi.cpp:62` include `HIGHS_VERSION_TWEAK` so `highs --version` reports `1.15.1.1` and `benchmark/scripts/solvers.py` regex picks 4-part; `docs/optimization-roadmap.md` + `docs/optimization-findings.md` tiered backlog (21 items)
 - Benchmark: set=super-fast (18 inst), geomean ratio vs 1.15.1 =0.873, faster/slower=17/1, saved +8.4s, mean diff -17.78%; set=fast (26 inst) geomean 0.995, 17/9, correctness PASS vs gurobi:12.0.3 (0 mismatches) on 12 threads 15s/60s
 - Verdict: merged
+
+### 1.15.1.2 — tune cutpool age/soft limits (REJECTED)
+- Branch: failed/tune-cutpool-age/1.15.1.2
+- Change: `highs/lp_data/HighsOptions.h:1175-1193` `mip_lp_age_limit 10→12`, `mip_pool_age_limit 30→35`, `mip_pool_soft_limit 10000→12000` (keep cuts longer)
+- Benchmark: set=super-fast geomean 1.360 (16/18 slower, 2 faster, +42.29%, saved -22.9s) vs 1.15.1.1; correctness PASS
+- Verdict: rejected — retaining more cuts bloats LP, `DuSimplexBasisSolveLp` time up, `total_lp_iterations` up, no bound gain. Default 30/10000/10 is well-tuned.
 
 _(none yet — add one entry per `HIGHS_TWEAK` bump — template below, keep)_
 
@@ -37,6 +44,8 @@ Entry format:
 ## Learnings
 
 Recurring pitfalls and harness facts. Add entries as they are discovered.
+
+- Cutpool: defaults 30/10000/10 well-tuned; increasing 35/12000/12 bloats LP (1.36x slower on super-fast, HighsCutGeneration bloat).
 
 - Bump `HIGHS_TWEAK` in `Version.txt` BEFORE building — the harness reads the
   version from the binary at runtime; results otherwise overwrite each other.

@@ -32,7 +32,7 @@ code. Companion docs:
 - Expected signal: `Perform aging` time down with higher limits, `separation rounds` stable, `DuSimplexBasisSolveLp` iter/node tradeoff
 - Validation: geomean on `super-fast`/`fast` at 60s; check `mip_pool_soft_limit` invariant `cutpools.size() ≤ soft_limit * factor`
 - Tier: 1
-- Status: proposed
+- Status: rejected (1.15.1.2) — 30→35/10000→12000/10→12 gave geomean 1.36x slower (16/18), saved -22.9s. Defaults well-tuned.
 
 ### 3 — Fix CMIR min violation 0.001*feastol
 - Component: highs/mip/HighsCutGeneration.cpp:603 | highs/mip/HighsTransformedLp.h
