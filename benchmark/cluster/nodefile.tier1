@@ -1,0 +1,6 @@
+# Tier 1: fast / homogeneous nodes for HiGHS MIPLIB2017 cluster benchmark
+# Only w14xx + w15xx — identical throughput nodes, 4 cores each
+# Lines are processed top-to-bottom = highest priority first (common.sh: find_available_nodes)
+# Each line is a Slurm nodelist expression
+w14[0-9][0-9]
+w15[0-9][0-9]

@@ -1,0 +1,14 @@
+# HiGHS versions to benchmark on woody (1.15.1 .. 1.15.1.8)
+# Format: <version> <git-ref>
+#   version = TWEAK string as appears in Version.txt / highs --version
+#   git-ref = tag or commit SHA to checkout for building that version
+# Lines starting with # are ignored. Order is benchmark order.
+1.15.1   v1.15.1
+1.15.1.1 ef7b164b43
+1.15.1.2 d2b75aaf99
+1.15.1.3 32f7a81637
+1.15.1.4 4c075feeb4
+1.15.1.5 e305923e3b
+1.15.1.6 ef3b3531b4
+1.15.1.7 b30c8cc3e8
+1.15.1.8 4c2f9b6f63

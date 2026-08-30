@@ -309,8 +309,12 @@ __pycache__/
 #   uv run python scripts/download_instances.py
 benchmark/.cache/
 benchmark/instances/
-# Extracted/cached MIPLIB2017 data (610 MB) under benchmark/sets/
-benchmark/sets/
+# Extracted/cached benchmark sets (MIPLIB2017, LP etc) under benchmark/sets/
+#  benchmark/sets/* is gitignored except the curated subset lists
+benchmark/sets/*
+!benchmark/sets/subsets/
+!benchmark/sets/subsets/**
+benchmark/sets/README.md
 
 # Per-machine solver result caches.
 #   benchmark/results/gurobi/  IS committed (Gurobi reference cache).
@@ -326,6 +330,10 @@ benchmark/*.lic
 # Cached HiGHS build binaries used by the harness - never commit
 benchmark/binaries/
 benchmark/test-*.txt
+# Cluster artifacts (SIF + versioned binaries + Slurm logs)
+benchmark/cluster/*.sif
+benchmark/cluster/binaries/
+slurm-*.out
 
 # ccache build cache
 .ccache/

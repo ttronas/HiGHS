@@ -1,0 +1,58 @@
+Bootstrap: docker
+From: mcr.microsoft.com/devcontainers/base:ubuntu-24.04
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        ccache \
+        clang \
+        clangd \
+        cmake \
+        curl \
+        g++ \
+        gcc \
+        git \
+        ninja-build \
+        python3-venv \
+        wget \
+    && rm -rf /var/lib/apt/lists/*
+
+    # uv — fast Python manager (also installed via .devcontainer/Dockerfile)
+    if [ ! -x /bin/uv ]; then
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        mv /root/.local/bin/uv /bin/uv 2>/dev/null || mv /root/.cargo/bin/uv /bin/uv 2>/dev/null || true
+        # fallback: copy from official image if available
+        if [ ! -x /bin/uv ] && command -v wget >/dev/null 2>&1; then
+            wget -qO /bin/uv https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-unknown-linux-gnu 2>/dev/null || true
+            chmod +x /bin/uv 2>/dev/null || true
+        fi
+    fi
+    # alternative: static copy via multi-stage not available in apptainer — ensure uvx symlink
+    ln -sf /bin/uv /bin/uvx 2>/dev/null || true
+
+    # Ensure vscode user exists (base image already has it)
+    id vscode >/dev/null 2>&1 || useradd -m -s /bin/bash vscode
+    mkdir -p /workspaces/HiGHS/.ccache
+    chown -R vscode:vscode /workspaces 2>/dev/null || true
+
+%environment
+    export LC_ALL=C
+    export PYTHONUNBUFFERED=1
+    export UV_LINK_MODE=copy
+    export UV_COMPILE_BYTECODE=1
+    export CCACHE_DIR=/workspaces/HiGHS/.ccache
+    export CCACHE_MAXSIZE=4G
+    export http_proxy=http://proxy:80
+    export https_proxy=http://proxy:80
+
+%runscript
+    exec "$@"
+
+# Mount points expected at runtime:
+#   --bind $REPO:/workspaces/HiGHS
+#   --bind $REPO/.ccache:/workspaces/HiGHS/.ccache
+# Gurobi license: provide at runtime via
+#   benchmark/gurobi.lic, $HOME/.gurobi/gurobi.lic, or benchmark/.env (GRB_WLS*)
+
