@@ -45,9 +45,12 @@ except ImportError:
 from solvers import KNOWN_SOLVERS, RunParams, make_solvers  # noqa: E402
 
 # Auto-repeat rule: solves faster than this are re-run so timing noise is
-# averaged out (spec: <5 s solves get repeated 3 times).
+# averaged out. Tier1 hardening: 5× for <5s (was 3×) reduces CV.
+# CV>5% triggers 2 extra runs (see apply_repeat_stats).
 REPEAT_THRESHOLD_S = 5.0
-AUTO_REPEATS = 3
+AUTO_REPEATS = 5
+REPEAT_CV_THRESHOLD = 0.05
+REPEAT_EXTRA_ON_HIGH_CV = 2
 
 
 def git_provenance(repo: Path) -> dict[str, object]:
@@ -70,13 +73,22 @@ def apply_repeat_stats(record: dict[str, object], times: list[float]) -> None:
     """Fold multiple runs into the record: runtime_s becomes the mean."""
     if len(times) <= 1:
         return
+    import statistics as _stats
     times_sorted = sorted(times)
     mean = sum(times) / len(times)
+    # stdev/CV for Tier1 reproducibility gate
+    try:
+        stdev = _stats.pstdev(times) if len(times) > 1 else 0.0
+    except _stats.StatisticsError:
+        stdev = 0.0
+    cv = (stdev / mean) if mean > 1e-9 else 0.0
     record["runs"] = [round(t, 4) for t in times]
     record["repeats"] = len(times)
     record["runtime_mean_s"] = round(mean, 4)
     record["runtime_min_s"] = round(times_sorted[0], 4)
     record["runtime_max_s"] = round(times_sorted[-1], 4)
+    record["runtime_stdev_s"] = round(stdev, 4)
+    record["runtime_cv"] = round(cv, 4)
     record["runtime_s"] = round(mean, 4)
 
 
@@ -211,8 +223,8 @@ def main() -> int:
     ap.add_argument("--repeats", default="auto", metavar="N|auto",
                     help="runs per instance; 'auto' repeats fast solves "
                          f"(<{REPEAT_THRESHOLD_S}s) {AUTO_REPEATS}x and averages "
-                         "(default auto). Averaged runs are stored as runs[], "
-                         "runtime_mean_s/min/max, with runtime_s = mean.")
+                         "(default auto, CV>5% adds 2). Averaged runs are stored as runs[], "
+                         "runtime_mean_s/min/max/stdev/cv, with runtime_s = mean.")
     ap.add_argument("--no-cache", action="store_true",
                     help="ignore cached results: re-benchmark instances that "
                          "already have a results file (identical to --force "
@@ -339,6 +351,14 @@ def main() -> int:
             print(f"error: {args.highs_options_file} must contain a mapping")
             return 1
         highs_options.update(data)
+    # Tier1 determinism: for super-fast/fast gates enforce fixed seed and
+    # deterministic search so wall-time variance is algorithmic, not scheduler.
+    # Full set may stay opportunistic for throughput.
+    if inst_set in ("super-fast", "fast") and args.threads > 1:
+        highs_options.setdefault("random_seed", 0)
+        highs_options.setdefault("mip_search_simulate_concurrency", True)
+        # timeless_log reduces log jitter; not used for timing but for stable logs
+        # highs_options.setdefault("timeless_log", True)
     if highs_options:
         print(f"highs_options: {highs_options}")
 

@@ -111,7 +111,9 @@ def series_metrics(records: list[dict], time_limit_default: float) -> dict[str, 
         status = (r.get("status") or "").lower()
         if status in SOLVED_STATUSES:
             solved += 1
-        t = r.get("runtime_s")
+        # Tier1 fix: prefer repeats-aware mean (runtime_mean_s) over single runtime_s
+        # to match compare_versions.py:144
+        t = r.get("runtime_mean_s", r.get("runtime_s"))
         t = limit if (t is None or (status in TIME_LIMIT_STATUSES)) else float(t)
         runtimes.append((r.get("instance", "?"), max(t, 0.0), limit))
     return {
@@ -244,10 +246,13 @@ def print_instance_matrix(series: dict[str, list[dict]]) -> dict:
         if r is None:
             return "--"
         status = str(r.get("status")).lower()
-        t = r.get("runtime_s")
+        t = r.get("runtime_mean_s", r.get("runtime_s"))
         ts = "--" if t is None else f"{float(t):.2f}s"
         if status in ("optimal", "infeasible", "unbounded"):
-            return f"{ts} {status}"
+            # Tier1: show CV when repeats exist
+            cv = r.get("runtime_cv")
+            cvs = f" cv{cv:.0%}" if isinstance(cv, (int, float)) and r.get("repeats", 1) > 1 else ""
+            return f"{ts}{cvs} {status}"
         return f"{ts} {status}"
 
     print("\ninstance".ljust(w), *(c[:18].ljust(18) for c in cols))

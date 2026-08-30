@@ -65,18 +65,17 @@ companion to `docs/optimization-findings.md` (what was learned) and
 ```
 planned  -> in-progress (branch created, TWEAK bumped)
          -> benchmarked (smoke + super-fast + fast done)
-         -> done (full-set confirm passed, merged to master)
+         -> full-validated (full miplib2017 60s, mandatory, PASS)
+         -> done (merged to master)
          -> rejected (documented in findings.md, branch renamed failed/...)
 ```
 
 ## Promotion gates
 
-A version may only be merged to master when ALL pass:
+A version may only be merged to master when ALL pass (2026-08-30: `full` is mandatory to avoid overfitting on `super-fast`/`fast` slices):
 
 1. Build clean, `ctest` green.
-2. Smoke set: all instances solved, correctness PASS vs ground truth.
-3. `super-fast`: no instance regresses >10% without documented justification;
-   shifted geomean ratio <= 1.00 vs baseline.
-4. `fast`: geomean improvement confirmed on larger subset.
-5. `full`: confirmation run at 60 s cap; solved-count does not decrease;
-   correctness PASS on every newly-solved and previously-solved instance.
+2. Smoke set: all instances solved, correctness PASS vs ground truth (`compare_versions.py` exit 0).
+3. `super-fast` (18 inst, 15s): iteration gate — no instance regresses >10% without justification; shifted geomean ratio <=1.00 vs baseline (`1.15.1.8` or `1.15.1.1` as per changelog).
+4. `fast` (41 inst, 60s): confirmation on larger subset — geomean ≤1.00 OR faster/slower margin≥5 with median diff ≤0.
+5. `full` (miplib2017, 240 inst, 60s cap, 12 threads): **mandatory before merge** — shifted geomean ≤1.00 vs baseline (or within 1% noise but `total_saved_s>0` and `faster>slower`), solved-count non-decreasing vs baseline, correctness PASS on every newly-solved and previously-solved instance, no tuning on `full`.

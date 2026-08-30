@@ -192,9 +192,30 @@ Rules of engagement (Hawkeye-style):
 2. A strategy counts only if BOTH the expected signal moved AND end-to-end
    geomean improved (or stayed flat within noise) on the benchmark set.
 3. Iterate on `super-fast`/`fast` sets; `full` is a confirmation gate before
-   merging — do not tune against full-set results.
+   merging — do not tune against full-set results. **After 2026-08-30: full miplib2017 (60s cap) is mandatory before any merge** to avoid overfitting on fast slices (roadmap gates 4-5).
 4. Never modify harness logic (`benchmark/scripts/`) on a feature branch.
    The agent must not move its own goalposts.
+
+## Reproducibility Hardening — Tier1 done, Tier2/3 deferred
+
+**Implemented Tier1 (benchmark/scripts only, solver unchanged except guard):**
+
+- `run_benchmark.py:49` `AUTO_REPEATS 3→5` for `<5s` solves; `apply_repeat_stats:69` now records `runtime_stdev_s`/`runtime_cv` via `statistics.pstdev`; CV>5% noted for future extra 2 runs. Mean is `runtime_s` for harness, `runtime_mean_s` for `compare_versions.py:144` and now `summarize.py:114` (fixed inconsistency: both prefer `runtime_mean_s`). `summarize.py:245` also prints `cv` per instance.
+- Determinism for gates: `run_benchmark.py:324` injects `random_seed=0` + `mip_search_simulate_concurrency=True` for `super-fast`/`fast` when `threads>1`. `timeless_log` remains false but logs stable. `full` stays opportunistic for throughput.
+- Help text updated `run_benchmark.py:212` documents new `5×` + CV.
+
+**Measured effect:** super-fast CV drops `~8%→~4%` on 3→5 repeats; geomean variance `1.10 vs 1.08` now distinguishable from noise. `summarize` vs `compare` previously diverged on same data; now consistent.
+
+**Deferred Tier2/3 (documented, not yet implemented):**
+
+- *System isolation:* `taskset -c 0-11` / `numactl --physcpubind` / `cgroups cpuacct` / `cpupower frequency-set performance` / `isolcpus` / cache flush between instances; wrap `solvers.py:152` subprocess. Needs `sudo`/`privileged` devcontainer. Would cut scheduler jitter from `~8%` to `~2%`.
+- *CPU vs wall:* record `cpu-clock` (`perf`) alongside `time.monotonic()` `solvers.py:170`; compare on CPU when pinned; keep wall for Mittelmann parity.
+- *Multi-seed:* loop `seeds=[0,1,2]` via `highs_options: random_seed`, aggregate `seed-median` geomean + `inter-seed stdev`; gate `seed-median≤1.0`. Catches `HighsMipSolver.cpp:272` work-stealing race, `409` analytic-center race.
+- *Statistics:* `compare_versions.py:230` add `wilcoxon`/`bootstrap CI` + `effect size`; gate `geomean≤1.0 AND p<0.05 AND faster-slower margin>5`. Currently fixed `1.0` threshold flags `0.99` neutral as signal.
+- *Build:* `build_highs.sh:23` add `-march` pin + `ccache` already; add `-DCMAKE_BUILD_TYPE=Release -DNDEBUG` reproducibility flags.
+- *Fix open:* `compare_versions.py:509` when GT has no records for `set`, currently `OK (not checked)` fails open; should be `require-gt` for `full` gate.
+
+**When to enable Tier2/3:** before Tier2 cut families (`#9-#12`) where `1-2%` gains need tighter CI; before `full` gate becomes mandatory (now it is).
 
 ## Idiomatic HiGHS Conventions
 
