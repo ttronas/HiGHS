@@ -461,8 +461,8 @@ def main() -> int:
     ap.add_argument("--pairs", default=None,
                     help='mode=pairwise: "REF>CAND[,REF>CAND...]"')
     ap.add_argument("--results-root", type=Path, default=results_dir())
-    ap.add_argument("--time-limit", type=float, default=7200.0,
-                    help="fallback limit when a record lacks one")
+    ap.add_argument("--time-limit", type=float, default=60.0,
+                    help="fallback limit when a record lacks one (default 60)")
     ap.add_argument("--include-timeouts", action="store_true",
                     help="count timeouts at the time limit instead of excluding "
                          "(default: solved-only comparison)")

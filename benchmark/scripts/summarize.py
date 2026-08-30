@@ -101,7 +101,10 @@ def load_series(results_root: Path) -> dict[str, list[dict]]:
     return dict(series)
 
 
-def series_metrics(records: list[dict], time_limit_default: float) -> dict[str, Any]:
+DEFAULT_TIME_LIMIT = 60.0
+
+
+def series_metrics(records: list[dict], time_limit_default: float = DEFAULT_TIME_LIMIT) -> dict[str, Any]:
     """Per-series aggregate over *its own* instances (all non-error records)."""
     runtimes, solved = [], 0
     for r in records:
@@ -137,13 +140,13 @@ def parse_mittelmann(path: Path) -> dict[str, dict[str, float]]:
     """Parse a plato.asu.edu 12threads.res table.
 
     Returns {solver_name: {instance: runtime_in_seconds}} with "timeout"
-    counted at the common 7200 s limit and non-numeric entries dropped.
+    counted at the common 60 s limit and non-numeric entries dropped.
     """
     text = path.read_text(errors="replace")
     lines = [ln for ln in text.splitlines() if ln.strip()]
     header = None
     data_started = False
-    timelimit = 7200.0
+    timelimit = 60.0
     parsed: dict[str, dict[str, float]] = defaultdict(dict)
     for ln in lines:
         s = ln.strip()
@@ -180,7 +183,7 @@ def format_table(series: dict[str, dict], ref: dict[str, dict] | None) -> str:
 
     buf = StringIO()
     all_limits = [tl for m in series.values() for (_, _, tl) in m["runtimes"]]
-    tl = max(all_limits) if all_limits else 7200.0
+    tl = max(all_limits) if all_limits else DEFAULT_TIME_LIMIT
     names = list(series.keys()) + ([f"plato {k}" for k in (ref or {})])
     print(f"{'solver/series':38} {'n':>5} {'solved':>7} {'unscaled':>10} {'scaled':>10}", file=buf)
     for label in names:
@@ -325,7 +328,7 @@ def main() -> int:
         if not series:
             print(f"no records for set '{args.set}'")
             return 1
-    metrics = {label: series_metrics(recs, time_limit_default=7200.0)
+    metrics = {label: series_metrics(recs, time_limit_default=DEFAULT_TIME_LIMIT)
                for label, recs in series.items()}
     for label, recs in series.items():
         print(f"series: {label}  ({len(recs)} records)")

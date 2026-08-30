@@ -32,7 +32,7 @@ class RunParams:
     """Options shared by every solver (kept identical across solvers)."""
 
     threads: int = 12
-    time_limit: float = 7200.0
+    time_limit: float = 60.0
     mip_gap: float = 1e-4
     # HiGHS-specific knobs (ignored by drivers that don't need them)
     highs_parallel: str = "on"

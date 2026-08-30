@@ -6,9 +6,9 @@
 # For float/int you may add log: true  (samples in log space).
 #
 # Example runs with:
-#   uv run python scripts/sample_train.py --source super-fast-instances.txt --k 8 --seed 0
-#   uv run python scripts/tune.py --train-set super-small-instances.txt --n-trials 100 --search-space configs/tune/example.yaml
-#   uv run python scripts/tune.py --train-set super-small-instances.txt --n-trials 5000 --search-space configs/tune/large.yaml
+#   uv run python scripts/sample_train.py --source sets/subsets/miplib2017-super-fast-instances.txt --k 8 --seed 0
+#   uv run python scripts/tune.py --train-set sets/subsets/miplib2017-super-small-instances.txt --n-trials 100 --search-space configs/tune/example.yaml
+#   uv run python scripts/tune.py --train-set sets/subsets/miplib2017-super-small-instances.txt --n-trials 5000 --search-space configs/tune/large.yaml
 
 # Heuristics
 mip_heuristic_effort:

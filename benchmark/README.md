@@ -1,7 +1,7 @@
 # HiGHS vs Gurobi benchmark
 
 Reproduces the setup of [H. Mittelmann's MIP benchmark](https://plato.asu.edu/ftp/milp.html)
-(MIPLIB2017 benchmark set, 240 instances, 12 threads, 7200 s time limit) on
+(MIPLIB2017 benchmark set, 240 instances, 12 threads, 60 s time limit) on
 your own machine, inside a devcontainer, so you can **benchmark your HiGHS
 build against Gurobi** as you develop.
 
@@ -71,7 +71,7 @@ uv run python scripts/run_benchmark.py --instances-root examples --set smoke-tes
 # single instance
 uv run python scripts/run_benchmark.py --instance p_air05
 
-# full benchmark (matches Mittelmann: 12 threads, 7200 s, 240 instances)
+# full benchmark (matches Mittelmann: 12 threads, 60 s, 240 instances)
 uv run python scripts/run_benchmark.py
 
 # Gurobi only, ignoring cache:
@@ -82,7 +82,7 @@ uv run python scripts/run_benchmark.py --solver gurobi --force --subset 1
 |---|---|---|
 | `--solver highs gurobi` | `highs gurobi` | which solvers to run; both share the params below |
 | `--threads` | 12 | solver threads (**identical for every solver**) |
-| `--time-limit` | 7200.0 | seconds per instance |
+| `--time-limit` | 60.0 | seconds per instance |
 | `--mip-gap` | 1e-4 | relative gap tolerance |
 | `--repeats` | `auto` | runs per instance; solves < 5 s are repeated 3x and averaged (`runs[]`, `runtime_mean_s/min/max`; `runtime_s` = mean) |
 | `--subset N` | - | first N instances (smoke test) |
@@ -102,33 +102,45 @@ uv run python scripts/run_benchmark.py --solver gurobi --force --subset 1
 | set | definition | purpose |
 |---|---|---|
 | `smoke-test` | bundled `examples/` (7 tiny MIPs) | fast gate: build sanity + correctness pipeline |
-| `super-fast` | baseline 1.15.1 solves < 10 s | iteration |
-| `fast` | baseline 1.15.1 solves < 60 s | confirmation on larger subset |
-| `miplib2017` (full) | all instances, 60 s cap | final gate before merge |
+| `miplib2017-super-fast` | baseline 1.15.1 solves < 10 s | iteration (MIP) |
+| `miplib2017-fast` | baseline 1.15.1 solves < 60 s | confirmation on larger subset (MIP) |
+| `miplib2017` (full) | all instances, 60 s cap | final gate before merge (MIP) |
+| `lp-mittelmann` (full) | 49 LP instances from Mittelmann LPfeas/LOP, 60 s cap | LP gate (production `solver=choose` → simplex) |
+| `lp-mittelmann-fast` | LP subset solved < 60 s | LP iteration |
+
+Subsets live in `benchmark/sets/subsets/`:
+
+```
+sets/subsets/miplib2017-super-fast-instances.txt  (18 inst, <10s)
+sets/subsets/miplib2017-fast-instances.txt         (41 inst, <60s)
+sets/subsets/miplib2017-super-small-instances.txt  (8 inst train, sampled from super-fast)
+sets/subsets/lp-mittelmann-fast-instances.txt      (generated after caching LP results)
+```
 
 Regenerate the lists from cached baseline timings:
 
 ```bash
-uv run python scripts/filter_sets.py     # writes super-fast-instances.txt + fast-instances.txt
+uv run python scripts/filter_sets.py                    # -> sets/subsets/miplib2017-fast/super-fast
+uv run python scripts/filter_sets.py --set lp-mittelmann  # -> sets/subsets/lp-mittelmann-fast.txt
 ```
 
-Iterate on `super-fast`, confirm on `fast`, and only run `full` when a version
+Iterate on `miplib2017-super-fast`, confirm on `miplib2017-fast`, and only run `full` when a version
 is a merge candidate. Every comparison goes through
 `scripts/compare_versions.py` (see below): correctness against the committed
 Gurobi ground truth is non-negotiable — mismatching instances are INVALID
-SIGNAL and fail the run.
+SIGNAL and fail the run. For LP, Gurobi still serves as ground truth (objective tolerance).
 
-For hyperparameter sweeps, derive a tiny train set from `super-fast`:
+For hyperparameter sweeps, derive a tiny train set from `miplib2017-super-fast`:
 
 ```bash
-uv run python scripts/sample_train.py --source super-fast-instances.txt --k 8 --seed 0   # deterministic, same 8 across all workers
-uv run python scripts/sample_train.py --source super-fast-instances.txt --k all --seed 0  # or use entire super-fast
+uv run python scripts/sample_train.py --source sets/subsets/miplib2017-super-fast-instances.txt --k 8 --seed 0   # deterministic, same 8 across all workers
+uv run python scripts/sample_train.py --source sets/subsets/miplib2017-super-fast-instances.txt --k all --seed 0  # or use entire super-fast
 ```
 
 Then tune via Optuna (no rebuild per trial — options injected via per-trial file):
 
 ```bash
-uv run python scripts/tune.py --train-set super-small-instances.txt --search-space configs/tune/example.yaml --n-trials 100 --time-limit 15 --test-set miplib2017
+uv run python scripts/tune.py --train-set sets/subsets/miplib2017-super-small-instances.txt --search-space configs/tune/example.yaml --n-trials 100 --time-limit 60 --test-set sets/subsets/miplib2017-fast-instances.txt
 # 100 for small spaces, 1000-5000 for large. --n-trials takes any integer.
 # Scoring locked: wrong vs ground truth = -1e6, timeout = -1e3, optimal = 1000/(t+10). Higher is better.
 ```
@@ -224,21 +236,25 @@ For version comparisons use the modular comparator:
 
 ```bash
 # one ground truth, many candidates (baseline mode; GT may be cross-solver)
-uv run python scripts/compare_versions.py --set super-fast \
+uv run python scripts/compare_versions.py --set miplib2017-super-fast \
     --versions highs:1.15.1 highs:1.15.1.9 --baseline gurobi:12.0.3
 
 # chain: b vs a, c vs b
-uv run python scripts/compare_versions.py --set super-fast --mode neighbor \
+uv run python scripts/compare_versions.py --set miplib2017-super-fast --mode neighbor \
     --versions 1.15.1.9 1.15.1.10 1.15.1.11
 
 # arbitrary pairs + machine-readable report
-uv run python scripts/compare_versions.py --set fast --mode pairwise \
+uv run python scripts/compare_versions.py --set miplib2017-fast --mode pairwise \
     --versions 1.15.1 1.15.1.9 1.15.1.10 \
     --pairs "1.15.1>1.15.1.9,1.15.1.9>1.15.1.10" --json-out cmp.json
 
 # full grid with versions-x-versions ratio matrix
-uv run python scripts/compare_versions.py --set fast --mode all \
+uv run python scripts/compare_versions.py --set miplib2017-fast --mode all \
     --versions 1.15.1 1.15.1.9 1.15.1.10
+
+# LP: production mode (solver=choose, no override) vs Gurobi ground truth
+uv run python scripts/compare_versions.py --set lp-mittelmann \
+    --versions highs:1.15.1 highs:1.15.1.9 --baseline gurobi:12.0.3
 ```
 
 Every pair reports ABSOLUTE values (mean/min/max/median seconds, total
@@ -316,7 +332,7 @@ it in `summarize.py` automatically (table, matrix, profile).
 - The Mittelmann table (/`12threads.res`) used v1-preprocessed instances on a
   Ryzen 9 5900X. Use it only as a rough sanity anchor, never as a cross-machine
   measurement.
-- Full runs (240 x 7200 s) take hours; use `--subset` for iteration and the
+- Full runs (240 x 60 s) take ~4h at 12 threads; use `--subset` for iteration and the
   full run for final numbers.
 - Gurobi license check happens at container creation; if Gurobi prints a
   licensing error during a run, fix the license and rerun with `--force`.

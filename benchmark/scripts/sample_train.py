@@ -75,10 +75,18 @@ def main() -> int:
 
     out = args.out
     if out is None:
-        # default next to source, named super-small-instances.txt when sampling super-fast
+        # default next to source; handle both legacy and new miplib2017-*-instances naming
         stem = args.source.stem
-        if stem == "super-fast-instances":
-            out = args.source.with_name("super-small-instances.txt")
+        if stem in ("super-fast-instances", "miplib2017-super-fast-instances"):
+            # miplib super-small is the train set
+            if stem == "super-fast-instances":
+                out = args.source.with_name("super-small-instances.txt")
+            else:
+                out = args.source.with_name("miplib2017-super-small-instances.txt")
+        elif stem.endswith("-super-fast-instances"):
+            # generic: <set>-super-fast-instances -> <set>-super-small-instances
+            base = stem[:-len("-super-fast-instances")]
+            out = args.source.with_name(f"{base}-super-small-instances.txt")
         else:
             out = args.source.with_name(f"{stem}-sample-{k_label}.txt")
 

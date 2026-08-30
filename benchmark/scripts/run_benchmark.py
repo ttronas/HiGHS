@@ -203,8 +203,8 @@ def main() -> int:
                     help="HiGHS executable (default <repo>/build/bin/highs)")
     ap.add_argument("--threads", type=int, default=12,
                     help="solver threads - same for every solver (default 12)")
-    ap.add_argument("--time-limit", type=float, default=7200.0,
-                    help="per-instance time limit in seconds (default 7200)")
+    ap.add_argument("--time-limit", type=float, default=60.0,
+                    help="per-instance time limit in seconds (default 60)")
     ap.add_argument("--mip-gap", type=float, default=1e-4,
                     help="relative MIP gap tolerance (default 1e-4)")
     ap.add_argument("--highs-parallel", choices=["on", "off"],
@@ -248,8 +248,10 @@ def main() -> int:
     results_root = args.results_root or results_dir()
     source = args.instances_file or inst_root
     expected_set = canonical_set_name(source)
-    if args.set and expected_set in {"fast", "super-fast", "miplib2017"} and \
-            args.set != expected_set:
+    # Guard against mismatched --set for well-known file-backed sets
+    known_sets = {"fast", "super-fast", "miplib2017", "miplib2017-fast", "miplib2017-super-fast",
+                  "lp-mittelmann", "lp-mittelmann-fast", "maros-meszaros"}
+    if args.set and expected_set in known_sets and args.set != expected_set:
         print(f"error: {source.name} requires result set '{expected_set}'")
         return 1
     inst_set = args.set or expected_set
@@ -354,7 +356,8 @@ def main() -> int:
     # Tier1 determinism: for super-fast/fast gates enforce fixed seed and
     # deterministic search so wall-time variance is algorithmic, not scheduler.
     # Full set may stay opportunistic for throughput.
-    if inst_set in ("super-fast", "fast") and args.threads > 1:
+    if inst_set in ("super-fast", "fast", "miplib2017-super-fast", "miplib2017-fast",
+                    "lp-mittelmann-fast", "lp-mittelmann-super-fast") and args.threads > 1:
         highs_options.setdefault("random_seed", 0)
         highs_options.setdefault("mip_search_simulate_concurrency", True)
         # timeless_log reduces log jitter; not used for timing but for stable logs

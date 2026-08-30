@@ -118,21 +118,22 @@ def write_list(path: Path, name: str, instances: list[str], ctx: dict) -> None:
 
 def main() -> int:
     repo = Path(__file__).resolve().parents[2]
+    default_subset_dir = repo / "benchmark" / "sets" / "subsets"
     ap = argparse.ArgumentParser(description="Generate super-fast/fast instance lists")
     ap.add_argument("--solver", default="highs")
     ap.add_argument("--version", default=DEFAULT_BASELINE,
                     help=f"baseline version to classify with (default {DEFAULT_BASELINE})")
-    ap.add_argument("--set", default=None,
-                    help="(deprecated) result-cache set tag; classification now "
-                         "unions all cached sets for the baseline version")
+    ap.add_argument("--set", default=DEFAULT_SET,
+                    help=f"result-cache set tag to classify (default {DEFAULT_SET}); "
+                         "classification uses only records for this set")
     ap.add_argument("--machine", default=None, help="machine dir (auto if unique)")
     ap.add_argument("--results-root", type=Path, default=None)
     ap.add_argument("--super-fast-below", type=float, default=DEFAULT_SUPER_FAST_BELOW)
     ap.add_argument("--fast-below", type=float, default=DEFAULT_FAST_BELOW)
-    ap.add_argument("--out-super-fast", type=Path,
-                    default=repo / "benchmark" / "super-fast-instances.txt")
-    ap.add_argument("--out-fast", type=Path,
-                    default=repo / "benchmark" / "fast-instances.txt")
+    ap.add_argument("--out-super-fast", type=Path, default=None,
+                    help="output for super-fast list (default sets/subsets/<set>-super-fast-instances.txt)")
+    ap.add_argument("--out-fast", type=Path, default=None,
+                    help="output for fast list (default sets/subsets/<set>-fast-instances.txt)")
     args = ap.parse_args()
 
     if args.super_fast_below >= args.fast_below:
@@ -141,7 +142,20 @@ def main() -> int:
     root = args.results_root or results_dir()
     machine, records_by_inst, seen_sets = load_records(
         args.version, args.solver, root, args.machine)
+    # Filter to requested set if it exists in cache (per-set classification)
+    if args.set not in seen_sets:
+        print(f"warning: set '{args.set}' not found among cached sets {seen_sets} — classifying over union")
+    else:
+        records_by_inst = {inst: rec for inst, rec in records_by_inst.items()
+                           if rec.get("_set") == args.set}
+        seen_sets = [args.set]
     records = list(records_by_inst.values())
+
+    # Resolve default output paths based on set name
+    if args.out_super_fast is None:
+        args.out_super_fast = default_subset_dir / f"{args.set}-super-fast-instances.txt"
+    if args.out_fast is None:
+        args.out_fast = default_subset_dir / f"{args.set}-fast-instances.txt"
 
     limits = sorted({float(r.get("time_limit") or 0) for r in records})
     if len(limits) > 1:

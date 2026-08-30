@@ -95,8 +95,8 @@ def main() -> int:
                     help="YAML/JSON mapping param -> {type, low/high/choices}")
     ap.add_argument("--n-trials", type=int, required=True,
                     help="number of Optuna trials (any integer, e.g. 100 or 5000)")
-    ap.add_argument("--time-limit", type=float, default=15.0,
-                    help="per-instance time limit for tuning runs (default 15)")
+    ap.add_argument("--time-limit", type=float, default=60.0,
+                    help="per-instance time limit for tuning runs (default 60)")
     ap.add_argument("--threads", type=int, default=4,
                     help="threads per solve (default 4, lower reduces noise under parallel tuning)")
     ap.add_argument("--highs-bin", type=Path, default=None,

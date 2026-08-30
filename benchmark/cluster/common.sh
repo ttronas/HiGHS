@@ -195,6 +195,6 @@ ensure_instances() {
         return 0
     fi
     echo "[instances] missing — downloading via download_instances.py inside container..."
-    container_exec "$repo_root" uv run python benchmark/scripts/download_instances.py
+    container_exec "$repo_root" bash -c "cd /workspaces/HiGHS/benchmark && uv sync --frozen 2>&1 | tail -n 5; uv run python scripts/download_instances.py"
 }
 

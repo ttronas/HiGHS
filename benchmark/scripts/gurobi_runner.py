@@ -41,7 +41,7 @@ def main() -> int:
     ap.add_argument("--instance", required=True, type=Path)
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--threads", type=int, default=12)
-    ap.add_argument("--time-limit", type=float, default=7200.0)
+    ap.add_argument("--time-limit", type=float, default=60.0)
     ap.add_argument("--mip-gap", type=float, default=1e-4)
     args = ap.parse_args()
 

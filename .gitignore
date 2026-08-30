@@ -314,7 +314,7 @@ benchmark/instances/
 benchmark/sets/*
 !benchmark/sets/subsets/
 !benchmark/sets/subsets/**
-benchmark/sets/README.md
+!benchmark/sets/README.md
 
 # Per-machine solver result caches.
 #   benchmark/results/gurobi/  IS committed (Gurobi reference cache).

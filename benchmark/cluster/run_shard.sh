@@ -141,10 +141,14 @@ if [ "$SOLVER" = "highs" ]; then
   HIGHS_ARGS=(--solver highs --highs-bin "$BIN")
 else
   HIGHS_ARGS=(--solver gurobi)
-  # Verify gurobi license inside container
+  # Ensure venv has gurobipy (uv project is benchmark/) then verify
+  echo "[$TAG] syncing benchmark venv inside container..."
+  container_exec "$REPO_ROOT" bash -c "cd /workspaces/HiGHS/benchmark && uv sync --frozen 2>&1 | tail -n 10; uv run python -c 'import gurobipy; print(gurobipy.gurobi.version())' 2>&1 | tail -n 10" || true
   echo "[$TAG] checking Gurobi license inside container..."
-  if ! container_exec "$REPO_ROOT" bash -c "uv run python -c 'import gurobipy; print(gurobipy.gurobi.version())' 2>&1 | tail -n 5"; then
-    echo "[$TAG] WARNING: gurobipy check failed — will still attempt run" >&2
+  if ! container_exec "$REPO_ROOT" bash -c "cd /workspaces/HiGHS/benchmark && uv run python -c 'import gurobipy; print(gurobipy.gurobi.version())' 2>&1 | tail -n 5"; then
+    echo "[$TAG] WARNING: gurobipy check failed — will still attempt run (will auto-sync again)" >&2
+    # Force sync once more if first check failed (network race)
+    container_exec "$REPO_ROOT" bash -c "cd /workspaces/HiGHS/benchmark && uv sync 2>&1 | tail -n 10" || true
   fi
 fi
 
@@ -157,26 +161,21 @@ fi
 echo "[$TAG] launching benchmark..."
 FORCE_FLAG=()
 if [ "$FORCE" = true ]; then FORCE_FLAG=(--force); fi
+# uv project is benchmark/ — must cd there
+BENCH_CMD=(uv run python scripts/run_benchmark.py
+    "${HIGHS_ARGS[@]}"
+    --threads "$THREADS"
+    --time-limit "$TIME_LIMIT"
+    --instances-root "$INSTANCES_ROOT"
+    --results-root "$RESULTS_ROOT"
+    --set "$SET"
+    "${FORCE_FLAG[@]}")
 set +e
 if [ "$SOLVER" = "highs" ]; then
-  container_exec "$REPO_ROOT" uv run python benchmark/scripts/run_benchmark.py \
-    "${HIGHS_ARGS[@]}" \
-    --threads "$THREADS" \
-    --time-limit "$TIME_LIMIT" \
-    --instances-root "$INSTANCES_ROOT" \
-    --results-root "$RESULTS_ROOT" \
-    --set "$SET" \
-    "${FORCE_FLAG[@]}"
+  container_exec "$REPO_ROOT" bash -c "cd /workspaces/HiGHS/benchmark && ${BENCH_CMD[*]}"
   RC=$?
 else
-  container_exec "$REPO_ROOT" uv run python benchmark/scripts/run_benchmark.py \
-    "${HIGHS_ARGS[@]}" \
-    --threads "$THREADS" \
-    --time-limit "$TIME_LIMIT" \
-    --instances-root "$INSTANCES_ROOT" \
-    --results-root "$RESULTS_ROOT" \
-    --set "$SET" \
-    "${FORCE_FLAG[@]}"
+  container_exec "$REPO_ROOT" bash -c "cd /workspaces/HiGHS/benchmark && ${BENCH_CMD[*]}"
   RC=$?
 fi
 set -e

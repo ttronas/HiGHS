@@ -55,16 +55,18 @@ binary at runtime. One commit = one bump = one changelog entry. Never skip.
 | set | definition | command |
 |-----|------------|---------|
 | smoke-test | bundled examples (7 tiny MIPs) | `--instances-root examples --set smoke-test` |
-| super-fast | baseline solves < 10 s | `--instances-file super-fast-instances.txt --time-limit 15` |
-| fast | baseline solves < 60 s | `--instances-file fast-instances.txt --time-limit 60` |
-| full | all instances @ 60 s cap | default instances root |
+| miplib2017-super-fast | baseline solves < 10 s | `--instances-file sets/subsets/miplib2017-super-fast-instances.txt --time-limit 60` |
+| miplib2017-fast | baseline solves < 60 s | `--instances-file sets/subsets/miplib2017-fast-instances.txt --time-limit 60` |
+| miplib2017 (full) | all instances @ 60 s cap | default instances root |
+| lp-mittelmann | 49 LP (Mittelmann public), 60 s cap | `--instances-root sets/lp-mittelmann --set lp-mittelmann` |
+| lp-mittelmann-fast | LP solves < 60 s | `--instances-file sets/subsets/lp-mittelmann-fast-instances.txt --time-limit 60` |
 
 Lists are machine-dependent: regenerate with
-`uv run python scripts/filter_sets.py` after machine/baseline changes.
+`uv run python scripts/filter_sets.py` (miplib) or `... --set lp-mittelmann` after machine/baseline changes.
 Iterate on super-fast, confirm on fast; run full ONLY as merge gate
-(anti-overfit: do not tune against full-set results).
+(anti-overfit: do not tune against full-set results). All benches 60s cap, CPU only, `solver=choose` (production).
 
-Solves faster than 5 s are automatically repeated 3x and averaged by the
+Solves faster than 5 s are automatically repeated 5x and averaged by the
 runner (`runs[]`, `runtime_mean_s`; `runtime_s` = mean). Force with
 `--repeats N`.
 
@@ -78,10 +80,10 @@ runner (`runs[]`, `runtime_mean_s`; `runtime_s` = mean). Force with
                        --instances-root examples --set smoke-test
 3. Unit tests:      cd build && ctest   (and uv run pytest scripts/test_compare_metrics.py)
 4. Iteration bench: uv run python scripts/run_benchmark.py \
-                       --instances-file super-fast-instances.txt --time-limit 15
-5. Gate+compare:    uv run python scripts/compare_versions.py --set super-fast \
+                       --instances-file sets/subsets/miplib2017-super-fast-instances.txt --time-limit 60
+5. Gate+compare:    uv run python scripts/compare_versions.py --set miplib2017-super-fast \
                        --versions highs:<base> highs:<cur>
-6. Confirm:         same with --set fast (fast-instances.txt, 60 s)
+6. Confirm:         same with --set miplib2017-fast (sets/subsets/miplib2017-fast-instances.txt, 60 s)
 7. Update changelog + findings + roadmap, then commit per Commit policy
 ```
 
@@ -144,9 +146,9 @@ excluded — a timeout is a lower bound, not an estimate).
 
 ## Hyperparameter tuning (no rebuild)
 
-1. `uv run python scripts/sample_train.py --source super-fast-instances.txt --k 8 --seed 0` — deterministic (same 8 across all workers); `--k all` uses entire super-fast.
+1. `uv run python scripts/sample_train.py --source sets/subsets/miplib2017-super-fast-instances.txt --k 8 --seed 0` — deterministic (same 8 across all workers); `--k all` uses entire super-fast.
 2. Edit `benchmark/configs/tune/*.yaml` — any `HighsOptions.h` param (all changeable). Omit = default.
-3. `uv run python scripts/tune.py --train-set super-small-instances.txt --search-space configs/tune/example.yaml --n-trials 100 --time-limit 15` — per-trial `workdir/trial_*.opts` via `--options_file`, isolated per worker; no rebuild. `--n-trials` any integer (100 small, 1000-5000 large).
+3. `uv run python scripts/tune.py --train-set sets/subsets/miplib2017-super-small-instances.txt --search-space configs/tune/example.yaml --n-trials 100 --time-limit 60` — per-trial `workdir/trial_*.opts` via `--options_file`, isolated per worker; no rebuild. `--n-trials` any integer (100 small, 1000-5000 large).
    Locked scoring: wrong vs GT `-1e6`, timeout `-1e3`, optimal `1000/(t+10)`; study mean, `direction=maximize`.
 4. Validate best on full set: re-run `run_benchmark` with `best_params.yaml` or `tune.py --test-set` then `compare_versions`.
 
