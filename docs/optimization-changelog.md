@@ -18,6 +18,7 @@ commit time. Never skip versions.
 | 1.15.1.5 | batch flushDomain | `feature/batch-flushDomain/1.15.1.5` | merged — 0.993x neutral |
 | 1.15.1.6 | probing lifting -1→1 | `failed/probing-lifting-sym/1.15.1.6` | rejected — 4 mismatches FAIL |
 | 1.15.1.7 | pscost 8→4 | `failed/tune-pscost-reliable/1.15.1.7` | rejected — 1.036x slower |
+| 1.15.1.8 | adaptive fixing-rate 0.4-0.7 | `feature/adaptive-fixing-rate/1.15.1.8` | merged — 0.877x vs 1.15.1.5 |
 
 ## Version Entries
 
@@ -63,6 +64,12 @@ commit time. Never skip versions.
 - Benchmark: set=super-fast geomean 1.036 (10/18 slower, 8 faster, +4.24%) vs 1.15.1.5; correctness PASS
 - Verdict: rejected — 8 well-tuned; 4 adds strong-branch overhead without branching gain.
 
+### 1.15.1.8 — adaptive fixing-rate 0.4-0.7
+- Branch: feature/adaptive-fixing-rate/1.15.1.8
+- Change: `highs/mip/HighsPrimalHeuristics.cpp:249` widen `low 0.6→0.4 high 0.6→0.7`, factors `0.9→0.85/1.15`, size-adapt `integral_cols/500`, clamp 0.2-0.9, swap guard
+- Benchmark: set=super-fast geomean 0.877 vs 1.15.1.5 (13/18 faster, 4 slower, saved 7.6s, mean -8.28%), vs 1.15.1.1 0.958; `neos859080` 2.97x (66% faster, 8.29→2.79s); correctness PASS
+- Verdict: merged
+
 _(none yet — add one entry per `HIGHS_TWEAK` bump — template below, keep)_
 
 Entry format:
@@ -86,6 +93,7 @@ Recurring pitfalls and harness facts. Add entries as they are discovered.
 - LpRelaxation: `flushDomain` already batched (single `changeColsBounds` per flush); no further batching gain (0.993x neutral).
 - Presolve probing: `mip_lifting_for_probing 1` breaks correctness (4 mismatches: infeasible, wrong obj) — keep -1.
 - Pseudocost: `mip_pscost_minreliable 8→4` 1.036x slower — 8 already optimal balance strong-branch cost vs reliability.
+- Fixing-rate: `0.4-0.7` widened `0.6` + `0.85/1.15` + size-adapt gives 0.877x vs 1.15.1.5 (13/18, 2.97x on `neos859080`).
 
 - Bump `HIGHS_TWEAK` in `Version.txt` BEFORE building — the harness reads the
   version from the binary at runtime; results otherwise overwrite each other.
