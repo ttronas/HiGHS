@@ -76,7 +76,7 @@ def main() -> int:
             "# Reference data\n\n"
             "Fetched by: `uv run python scripts/download_instances.py --fetch-reference`\n"
             "- `mittelmann-12threads.res`: H. Mittelmann's MILP benchmark table "
-            "(https://plato.asu.edu/ftp/milp.html, 12 threads, 7200 s limit).\n"
+            "(https://plato.asu.edu/ftp/milp.html, 12 threads, 60 s limit now; original table used 7200 s).\n"
             "- `benchmark-v{1,2}.test`: MIPLIB2017 benchmark-set instance lists.\n"
             "- `miplib2017.solu`: best-known solution values for validation.\n"
         )
@@ -106,10 +106,10 @@ def main() -> int:
         for member in names:
             zf.extract(member, out_dir)
 
-    instances = [p for p in out_dir.rglob("*") if p.is_file() and p.suffix == ".mps"]
+    instances = [p for p in out_dir.rglob("*") if p.is_file() and p.name.endswith((".mps", ".mps.gz", ".mps.zst", ".lp", ".lp.gz"))]
     print(f"unpacked {len(instances)} instances -> {out_dir}")
     if not instances:
-        print("  (no .mps files found; the archive layout may differ - listing:)")
+        print("  (no model files found; the archive layout may differ - listing:)")
         for member in names[:20]:
             print("   ", member)
     return 0

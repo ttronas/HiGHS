@@ -31,7 +31,8 @@ done
 
 if [ ! -f "$VERSIONS_FILE" ]; then echo "versions file not found: $VERSIONS_FILE" >&2; exit 1; fi
 BIN_DIR="${REPO_ROOT}/benchmark/cluster/binaries"
-mkdir -p "$BIN_DIR"
+ALT_BIN_DIR="${REPO_ROOT}/benchmark/binaries"
+mkdir -p "$BIN_DIR" "$ALT_BIN_DIR"
 SIF_FILE="${REPO_ROOT}/benchmark/cluster/highs-bench.sif"
 
 if [ ! -f "$SIF_FILE" ]; then
@@ -114,11 +115,13 @@ while IFS= read -r line || [ -n "$line" ]; do
       /tmp/out/highs-${ver} --version || true
     "
 
-  # Verify + hash
+  # Verify + hash — also mirror to benchmark/binaries for compatibility
   if [ ! -f "$bin" ]; then echo "  error: binary not produced: $bin" >&2; exit 1; fi
   chmod +x "$bin"
+  cp -a "$bin" "${ALT_BIN_DIR}/highs-${ver}" 2>/dev/null || cp "$bin" "${ALT_BIN_DIR}/highs-${ver}"
   sha=$(sha256sum "$bin" | awk '{print $1}')
   echo "  built: $bin  sha256=$sha  ver=$("$bin" --version 2>&1 | head -n 1)"
+  echo "  mirrored to ${ALT_BIN_DIR}/highs-${ver}"
   if [ "$first" = true ]; then first=false; else echo "," >> "${MANIFEST}.tmp"; fi
   printf '  "%s": "%s"' "$ver" "$sha" >> "${MANIFEST}.tmp"
 
@@ -135,5 +138,7 @@ mv "${MANIFEST}.tmp" "$MANIFEST"
 echo "────────────────────────────────────────────────────────"
 echo "[build] manifest: $MANIFEST"
 cat "$MANIFEST"
-echo "[build] binaries:"
+echo "[build] binaries (cluster):"
 ls -lh "$BIN_DIR"/highs-* 2>/dev/null || true
+echo "[build] binaries (benchmark/binaries mirror):"
+ls -lh "$ALT_BIN_DIR"/highs-* 2>/dev/null || true
