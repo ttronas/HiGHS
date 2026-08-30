@@ -29,7 +29,7 @@ companion to `docs/optimization-findings.md` (what was learned) and
 | 5 | Batch `flushDomain` bound changes in `HighsLpRelaxation::resolveLp` | `highs/mip/HighsLpRelaxation.cpp:711` | 1 | done (1.15.1.5) | Already batched single `changeColsBounds` per flush; added comment. Super-fast 0.993 (9/9) neutral, PASS. No further batching needed. |
 | 6 | Experiment `mip_lifting_for_probing`, `mip_detect_symmetry`, `mip_root_presolve_only` | `highs/presolve/HPresolve.cpp` `highs/lp_data/HighsOptions.h:1159` | 1 | rejected (1.15.1.6) | Tested `lifting -1→1`: 4 mismatches FAIL (infeasible vs optimal). Keep -1. Symmetry already `true`, `root_presolve_only false` correct. |
 | 7 | Tune `mip_pscost_minreliable` 8→4/12 + `mip_min_cliquetable_entries_for_parallelism` | `highs/mip/HighsPseudocost.cpp` `highs/lp_data/HighsOptions.h:1196` | 1 | rejected (1.15.1.7) | Tested `pscost 8→4`: geomean 1.036x slower (10/18 slower, 8 faster). Keep 8. |
-| 8 | Adaptive RENS/RINS fixing-rate (`determineTargetFixingRate 0.6`) + sub-MIP leaf/node budgets | `highs/mip/HighsPrimalHeuristics.cpp:249-273,627` | 1 | planned | Naive 0.6 base; Gurobi RINS adapts via infeas/success observations. |
+| 8 | Adaptive RENS/RINS fixing-rate (`determineTargetFixingRate 0.6`) + sub-MIP leaf/node budgets | `highs/mip/HighsPrimalHeuristics.cpp:249` | 1 | done (1.15.1.8) | Widened `low 0.6→0.4 high 0.6→0.7`, factors `0.9→0.85/1.15`, size-adapt `integral_cols/500`. Super-fast vs 1.15.1.5 0.877 (13/4, 2.97x on `neos859080`), vs 1.15.1.1 0.958 (9/9). PASS. |
 
 ## Backlog — Tier 2 (medium complexity, correctness-sensitive)
 

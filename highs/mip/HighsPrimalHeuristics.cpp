@@ -248,8 +248,8 @@ bool HighsPrimalHeuristics::solveSubMip(
 
 double HighsPrimalHeuristics::determineTargetFixingRate(
     HighsMipWorker& worker) {
-  double lowFixingRate = 0.6;
-  double highFixingRate = 0.6;
+  double lowFixingRate = 0.4;
+  double highFixingRate = 0.7;
 
   HighsRandom& randgen =
       mipsolver.mipdata_->parallelLockActive() ? worker.randgen : this->randgen;
@@ -257,16 +257,27 @@ double HighsPrimalHeuristics::determineTargetFixingRate(
   if (getNumInfeasObservations(worker) != 0) {
     double infeasRate =
         getInfeasObservations(worker) / getNumInfeasObservations(worker);
-    highFixingRate = 0.9 * infeasRate;
+    highFixingRate = 0.85 * infeasRate;
     lowFixingRate = std::min(lowFixingRate, highFixingRate);
   }
 
   if (getNumSuccessObservations(worker) != 0) {
     double successFixingRate =
         getSuccessObservations(worker) / getNumSuccessObservations(worker);
-    lowFixingRate = std::min(lowFixingRate, 0.9 * successFixingRate);
-    highFixingRate = std::max(successFixingRate * 1.1, highFixingRate);
+    lowFixingRate = std::min(lowFixingRate, 0.85 * successFixingRate);
+    highFixingRate = std::max(successFixingRate * 1.15, highFixingRate);
   }
+  // Early search: when no observations yet, adapt to problem size
+  if (getNumInfeasObservations(worker) == 0 &&
+      getNumSuccessObservations(worker) == 0) {
+    double sizeFactor = std::min(1.0, mipsolver.mipdata_->integral_cols.size() / 500.0);
+    // Larger problems need higher fixing to keep sub-MIP tractable
+    lowFixingRate = 0.4 + 0.1 * sizeFactor;
+    highFixingRate = 0.7 + 0.05 * sizeFactor;
+  }
+  if (lowFixingRate > highFixingRate) std::swap(lowFixingRate, highFixingRate);
+  lowFixingRate = std::max(0.2, std::min(0.8, lowFixingRate));
+  highFixingRate = std::max(0.2, std::min(0.9, highFixingRate));
 
   double fixingRate = randgen.real(lowFixingRate, highFixingRate);
   // if (!mipsolver.submip) printf("fixing rate: %.2f\n", 100.0 * fixingRate);

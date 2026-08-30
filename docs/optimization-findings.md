@@ -75,12 +75,12 @@ code. Companion docs:
 - Status: rejected (1.15.1.7) — `8→4` gave 1.036x slower (10/18), neutral. Keep 8.
 
 ### 8 — Adaptive RENS/RINS fixing-rate
-- Component: highs/mip/HighsPrimalHeuristics.cpp:249-273,627 | highs/mip/HighsMipSolverData.cpp:669
-- Idea: Replace naive `low/highFixingRate 0.6` with observation-driven adaptation (`infeasObservations`/`successObservations`) already partially present but under-tuned; sweep sub-MIP leaf/node budgets `500 / 200+nodes/20 / stall 12`.
-- Expected signal: `Sub-MIP solves` time vs `numImprovingSols` tradeoff, fixing-rate log moves toward observed success
-- Validation: `solveSubMip` returns deterministic vs seed; check `worker.terminatorTerminated()` path
+- Component: highs/mip/HighsPrimalHeuristics.cpp:249
+- Idea: Replace naive `low/highFixingRate 0.6` with `0.4-0.7` widened, `0.85/1.15` factors, size-adapt `integral_cols/500`, clamp 0.2-0.9. More exploration early, faster infeas/success adaptation.
+- Expected signal: `Sub-MIP solves` time vs `numImprovingSols` tradeoff, `neos859080` infeas faster, `SubMipSolve` clock
+- Validation: `solveSubMip` deterministic; `compare_versions.py` PASS
 - Tier: 1
-- Status: proposed
+- Status: merged (1.15.1.8) — 0.877 vs 1.15.1.5 (13/18), 2.97x on `neos859080`, PASS.
 
 ### 9 — GMI/Gomory separator
 - Component: highs/mip/HighsTableauSeparator.* | highs/mip/HighsCutGeneration.*
