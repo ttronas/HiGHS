@@ -137,7 +137,9 @@ fi
 if [ "$SOLVER" = "highs" ]; then
   BIN="${BIN_DIR}/highs-${VERSION}"
   if [ ! -x "$BIN" ]; then echo "[$TAG] binary not found: $BIN" >&2; exit 1; fi
-  echo "[$TAG] binary: $BIN ($("$BIN" --version 2>&1 | head -n1))"
+  # Version check must run inside container (host woody has GLIBC 2.17, container has 2.38)
+  BIN_VER=$(container_exec "$REPO_ROOT" bash -c " /workspaces/HiGHS/benchmark/cluster/binaries/highs-${VERSION} --version 2>&1 | head -n1" || echo "unknown")
+  echo "[$TAG] binary: $BIN ($BIN_VER) host_check: $("$BIN" --version 2>&1 | head -n1 || echo 'host GLIBC mismatch — will run inside container')"
   HIGHS_ARGS=(--solver highs --highs-bin "$BIN")
 else
   HIGHS_ARGS=(--solver gurobi)
