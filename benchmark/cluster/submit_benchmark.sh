@@ -234,13 +234,42 @@ echo "════════════════════════�
 echo "Waiting for ${#JOB_IDS[@]} jobs... (poll every 30s)"
 
 # Poll until all jobs are no longer in queue (COMPLETED/FAILED/CANCELLED)
+# Use squeue + sacct fallback; print only pending IDs (not all)
+poll_count=0
 while true; do
-  pending=0
+  pending_ids=()
   for jid in "${JOB_IDS[@]}"; do
-    if squeue -j "$jid" -h 2>/dev/null | grep -q "$jid"; then pending=$((pending+1)); fi
+    # squeue shows PENDING/RUNNING/COMPLETING; after completion sacct is authoritative
+    sq_out=$(squeue -j "$jid" -h -o "%i %T" 2>/dev/null | head -n1 || true)
+    if echo "$sq_out" | grep -qw "$jid"; then
+      state=$(echo "$sq_out" | awk '{print $2}' | tr -d ' ')
+      # COMPLETING still counts as running for walltime, but we treat as pending until sacct confirms
+      if [[ "$state" =~ ^(PENDING|RUNNING|CONFIGURING|COMPLETING|SUSPENDED)$ ]]; then
+        pending_ids+=("$jid")
+        continue
+      fi
+    fi
+    # squeue empty or state not pending -> check sacct (authoritative after job leaves queue)
+    # sacct may report PENDING/RUNNING for a short window even after squeue empty
+    sacct_state=$(sacct -j "$jid" --format=State --noheader 2>/dev/null | head -n1 | tr -d ' ' || true)
+    if [[ "$sacct_state" =~ PENDING|RUNNING|REQUEUED|RESIZING|COMPLETING ]]; then
+      pending_ids+=("$jid")
+    fi
   done
+  pending=${#pending_ids[@]}
   if [ "$pending" -eq 0 ]; then break; fi
-  echo "  $(date +%H:%M:%S)  $pending jobs still queued/running: ${JOB_IDS[*]}"
+  # Print pending IDs, not all, and every 10th poll also show sacct states
+  poll_count=$((poll_count+1))
+  if [ $((poll_count % 20)) -eq 0 ]; then
+    echo "  $(date +%H:%M:%S)  $pending jobs still queued/running: ${pending_ids[*]} (all: ${JOB_IDS[*]})"
+    for pj in "${pending_ids[@]}"; do
+      sq=$(squeue -j "$pj" -h -o "%i %T %R" 2>/dev/null | head -n1 || echo "not in squeue")
+      sa=$(sacct -j "$pj" --format=JobID,State,Elapsed --noheader 2>/dev/null | head -n1 || echo "no sacct")
+      echo "    $pj  squeue: $sq  sacct: $sa"
+    done
+  else
+    echo "  $(date +%H:%M:%S)  $pending jobs still queued/running: ${pending_ids[*]}"
+  fi
   sleep 30
 done
 
